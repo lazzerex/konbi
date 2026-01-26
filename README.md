@@ -10,6 +10,10 @@ A minimal, elegant web application for sharing files and text notes online with 
 
 > **Note:** Current version runs on local machine. Production deployment coming soon.
 
+<img width="892" height="658" alt="Screenshot_2026-01-26_23-30-00" src="https://github.com/user-attachments/assets/c0bd1543-61ba-4d66-ac13-5d187c0d06d3" />
+
+<img width="889" height="634" alt="Screenshot_2026-01-26_23-30-34" src="https://github.com/user-attachments/assets/d5ac8449-057f-4854-9b2a-f15b7e209923" />
+
 ## Features
 
 **Easy Sharing**
