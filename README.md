@@ -1,5 +1,11 @@
 # Konbi
 
+![Go Version](https://img.shields.io/badge/Go-1.21-00ADD8?style=flat&logo=go&logoColor=white)
+![React](https://img.shields.io/badge/React-18.2-61DAFB?style=flat&logo=react&logoColor=black)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat)
+![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=flat&logo=vercel)
+![Railway](https://img.shields.io/badge/Backend-Railway-0B0D0E?style=flat&logo=railway&logoColor=white)
+
 A minimal, elegant web application for sharing files and text notes online with zero friction. Upload files or create notes and instantly get a shareable link.
 
 > **Note:** Current version runs on local machine. Production deployment coming soon.
