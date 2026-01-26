@@ -1,0 +1,10 @@
+# Railway deployment configuration
+# This file helps Railway detect and deploy the Go backend
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "./konbi"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
