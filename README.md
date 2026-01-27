@@ -2,7 +2,9 @@
 
 <p align="center">
   
- <img width="725" height="244" alt="konbi" src="https://github.com/user-attachments/assets/3792a6ba-2487-4ce8-a398-3f987c55ba5a" />
+
+<img width="811" height="308" alt="konbi_fix_logo" src="https://github.com/user-attachments/assets/91e4068e-4738-400b-9984-eac70c189cb8" />
+
 
 </p>
 
