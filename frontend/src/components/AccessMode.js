@@ -20,16 +20,6 @@ function AccessMode() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    // check if id is in url
-    const params = new URLSearchParams(window.location.search);
-    const urlId = params.get('id');
-    if (urlId) {
-      setId(urlId);
-      handleFetch(urlId);
-    }
-  }, []);
-
   const handleFetch = async (contentId = id) => {
     if (!contentId.trim()) {
       setError('Please enter an ID');
@@ -49,6 +39,17 @@ function AccessMode() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // check if id is in url
+    const params = new URLSearchParams(window.location.search);
+    const urlId = params.get('id');
+    if (urlId) {
+      setId(urlId);
+      handleFetch(urlId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDownload = () => {
     // create download link
