@@ -1,12 +1,22 @@
 # Konbi
 
-![Go Version](https://img.shields.io/badge/Go-1.21-00ADD8?style=flat&logo=go&logoColor=white)
-![React](https://img.shields.io/badge/React-18.2-61DAFB?style=flat&logo=react&logoColor=black)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat)
-![Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=flat&logo=vercel)
-![Railway](https://img.shields.io/badge/Backend-Railway-0B0D0E?style=flat&logo=railway&logoColor=white)
+<p align="center">
+  
+ <img width="725" height="244" alt="konbi" src="https://github.com/user-attachments/assets/3792a6ba-2487-4ce8-a398-3f987c55ba5a" />
 
-A minimal, elegant web application for sharing files and text notes online with zero friction. Upload files or create notes and instantly get a shareable link.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat&logo=go&logoColor=white"/>
+  <img src="https://img.shields.io/badge/React-18.2-61DAFB?style=flat&logo=react&logoColor=black"/>
+  <img src="https://img.shields.io/badge/License-MIT-green?style=flat"/>
+  <img src="https://img.shields.io/badge/Deployed%20on-Vercel-black?style=flat&logo=vercel&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Backend-Railway-0B0D0E?style=flat&logo=railway&logoColor=white"/>
+</p>
+
+<p align="center">
+  <strong>A minimal, elegant web application for sharing files and text notes online with zero friction. Upload files or create notes and instantly get a shareable link.</strong>
+</p>
 
 > **Note:** Current version runs on local machine. Production deployment coming soon.
 
