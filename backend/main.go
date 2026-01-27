@@ -58,7 +58,22 @@ func main() {
 		api.GET("/content/:id", handleGetContent)
 		api.GET("/content/:id/download", handleDownload)
 		api.GET("/stats/:id", handleGetStats)
+		api.GET("/admin/list", handleAdminList)
 	}
+
+	// root route
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Konbi API",
+			"version": "1.0",
+			"endpoints": gin.H{
+				"health":  "/health",
+				"upload":  "POST /api/upload",
+				"note":    "POST /api/note",
+				"content": "GET /api/content/:id",
+			},
+		})
+	})
 
 	// health check
 	r.GET("/health", func(c *gin.Context) {
