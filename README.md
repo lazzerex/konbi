@@ -21,10 +21,12 @@
 </p>
 
 > **Note:** Current version runs on local machine. Production deployment coming soon.
+<img width="1184" height="693" alt="konbi1" src="https://github.com/user-attachments/assets/3c52e1a3-f29a-4e0a-b790-99dca741f4ef" />
+<img width="1177" height="689" alt="konbi3" src="https://github.com/user-attachments/assets/79eaef47-a80d-4ff9-98a9-3da43f41b3e1" />
+<img width="1171" height="684" alt="konbi2" src="https://github.com/user-attachments/assets/55840d19-9d99-4f5a-a566-b462558796f3" />
+<img width="1169" height="689" alt="konbi4" src="https://github.com/user-attachments/assets/a09129d4-fed7-4ed9-a5f7-c749fb5a4d32" />
 
-<img width="892" height="658" alt="Screenshot_2026-01-26_23-30-00" src="https://github.com/user-attachments/assets/c0bd1543-61ba-4d66-ac13-5d187c0d06d3" />
 
-<img width="889" height="634" alt="Screenshot_2026-01-26_23-30-34" src="https://github.com/user-attachments/assets/d5ac8449-057f-4854-9b2a-f15b7e209923" />
 
 ## Features
 
