@@ -324,6 +324,19 @@ func handleDownload(c *gin.Context) {
 }
 
 func handleAdminList(c *gin.Context) {
+	// Check admin secret
+	adminSecret := os.Getenv("ADMIN_SECRET")
+	if adminSecret == "" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Admin endpoint disabled"})
+		return
+	}
+
+	providedSecret := c.GetHeader("X-Admin-Secret")
+	if providedSecret != adminSecret {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	rows, err := db.Query(`
 		SELECT id, type, title, filename, filesize, created_at, expires_at, view_count 
 		FROM content 
