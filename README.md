@@ -20,7 +20,10 @@
   <strong>A minimal, elegant web application for sharing files and text notes online with zero friction. Upload files or create notes and instantly get a shareable link.</strong>
 </p>
 
-> **Note:** Current version runs on local machine. Production deployment coming soon.
+<p align="center">
+  <strong>Live Application</strong><br/>
+  Frontend deployed on <strong>Vercel</strong> | Backend deployed on <strong>Railway</strong>
+</p>
 <img width="1184" height="693" alt="konbi1" src="https://github.com/user-attachments/assets/3c52e1a3-f29a-4e0a-b790-99dca741f4ef" />
 <img width="1177" height="689" alt="konbi3" src="https://github.com/user-attachments/assets/79eaef47-a80d-4ff9-98a9-3da43f41b3e1" />
 <img width="1171" height="684" alt="konbi2" src="https://github.com/user-attachments/assets/55840d19-9d99-4f5a-a566-b462558796f3" />
@@ -51,15 +54,17 @@
 
 **Frontend:**
 - React 18
+- Framer Motion for animations
 - Axios for API calls
-- Responsive CSS design
-- Hosted on Vercel
+- Responsive design with theme support
+- Deployed on Vercel
 
 **Backend:**
 - Go (Golang)
 - Gin web framework
 - SQLite database
 - Local filesystem storage
+- Deployed on Railway
 
 ## Project Structure
 
@@ -91,6 +96,18 @@ konbi/
 ```
 
 ## Getting Started
+
+### Using the Live Application
+
+The application is live and ready to use:
+- Visit the deployed frontend on Vercel
+- Share files up to 50MB or create text notes
+- Get instant shareable links
+- Content automatically expires after 7 days
+
+### Local Development Setup
+
+If you want to run the application locally or contribute to development:
 
 ### Prerequisites
 
@@ -237,50 +254,67 @@ Get statistics for content.
 
 ## Deployment
 
+The application is currently deployed and running in production:
+- **Frontend:** Vercel (automatic deployments from main branch)
+- **Backend:** Railway (automatic deployments from main branch)
+
+### Deploying Your Own Instance
+
+If you want to deploy your own instance of Konbi, follow these guides:
+
 ### Frontend (Vercel)
 
-1. Install Vercel CLI:
+1. Install Vercel CLI (optional, can also deploy via web):
 ```bash
 npm install -g vercel
 ```
 
-2. Navigate to frontend directory:
-```bash
-cd frontend
-```
+2. Connect your GitHub repository to Vercel:
+   - Go to [Vercel Dashboard](https://vercel.com)
+   - Click "New Project"
+   - Import your repository
+   - Select the `frontend` directory as the root
 
-3. Deploy:
-```bash
-vercel --prod
-```
+3. Configure build settings:
+   - **Framework Preset:** Create React App
+   - **Build Command:** `npm run build`
+   - **Output Directory:** `build`
 
 4. Set environment variable in Vercel dashboard:
 ```
-REACT_APP_API_URL=https://your-backend-url.com/api
+REACT_APP_API_URL=https://your-railway-backend-url.up.railway.app/api
 ```
+
+5. Deploy - Vercel will automatically deploy on every push to main branch
 
 ### Backend (Railway)
 
-1. Install Railway CLI:
-```bash
-npm install -g @railway/cli
-```
+**Recommended for Production**
 
-2. Login and initialize:
-```bash
-railway login
-cd backend
-railway init
-```
+1. Push your code to GitHub
 
-3. Deploy:
-```bash
-railway up
-```
+2. Go to [Railway.app](https://railway.app)
 
-4. The service will automatically use `railway.toml` configuration
+3. Click "New Project" → "Deploy from GitHub repo"
+
+4. Select your repository
+
+5. Railway will automatically:
+   - Detect the Go application
+   - Use the `railway.toml` configuration
+   - Set up the build and deployment
+
+6. Configure environment variables (optional):
+   - `PORT` - Railway sets this automatically
+   - `DB_PATH` - Path for SQLite database
+
+7. Your backend will be live with a Railway URL
+
+**Note:** Railway provides persistent volumes for SQLite database storage.
 
 ### Backend (Fly.io)
+
+**Alternative deployment option:**
 
 1. Install Fly CLI:
 ```bash
@@ -309,6 +343,8 @@ fly volumes create konbi_data --size 1
 
 ### Backend (Render)
 
+**Alternative deployment option:**
+
 1. Create new Web Service on Render
 2. Connect your GitHub repository
 3. Configure:
@@ -316,6 +352,31 @@ fly volumes create konbi_data --size 1
    - **Start Command:** `./konbi`
    - **Environment:** Go
 4. Add environment variables if needed
+
+## Production Architecture
+
+The live application uses the following architecture:
+
+```
+User Browser
+     ↓
+Vercel (Frontend - React SPA)
+     ↓
+Railway (Backend - Go API)
+     ↓
+SQLite Database (Persistent Volume)
+     ↓
+File Storage (Railway Volume)
+```
+
+**Key Features in Production:**
+- HTTPS encryption on both frontend and backend
+- CORS configured for secure cross-origin requests
+- Rate limiting to prevent abuse
+- Automatic HTTPS redirects
+- CDN distribution via Vercel
+- Persistent storage on Railway
+- Automatic deployments from GitHub
 
 ## Configuration
 
