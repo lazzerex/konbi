@@ -1,6 +1,6 @@
 .access-mode {
   width: 100%;
-  max-width: 700px;
+  max-width: 900px;
 }
 
 .search-section {
@@ -39,7 +39,7 @@
 .search-bar {
   display: flex;
   gap: 12px;
-  max-width: 650px;
+  max-width: 850px;
   margin: 0 auto;
 }
 
@@ -50,7 +50,6 @@
   border-radius: 12px;
   font-size: 15px;
   transition: all 0.3s ease;
-  text-transform: uppercase;
   letter-spacing: 2px;
   font-weight: 600;
   background: var(--bg-secondary);
