@@ -42,9 +42,15 @@ func main() {
 
 	// cors config
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"*"} // configure for production
+	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOrigins != "" {
+		config.AllowOrigins = []string{allowedOrigins}
+	} else {
+		// Development fallback
+		config.AllowOrigins = []string{"http://localhost:3000"}
+	}
 	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Content-Length", "Accept"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Content-Length", "Accept", "X-Admin-Secret"}
 	r.Use(cors.New(config))
 
 	// rate limiting
