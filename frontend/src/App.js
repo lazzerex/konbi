@@ -4,7 +4,7 @@ import { HiSun, HiMoon, HiUpload, HiSearch, HiLightningBolt, HiShieldCheck, HiCl
 import './App.css';
 import ShareMode from './components/ShareMode';
 import AccessMode from './components/AccessMode';
-import logo from '../public/konbi_logo.png';
+import logo from './konbi_logo.png';
 
 function App() {
   const [mode, setMode] = useState('share');
