@@ -4,6 +4,7 @@ import { HiSun, HiMoon, HiUpload, HiSearch, HiLightningBolt, HiShieldCheck, HiCl
 import './App.css';
 import ShareMode from './components/ShareMode';
 import AccessMode from './components/AccessMode';
+import logo from '../public/konbi_logo.png';
 
 function App() {
   const [mode, setMode] = useState('share');
@@ -88,7 +89,7 @@ function App() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <img src="/konbi_logo.png" alt="konbi" className="logo-image" />
+            <img src={logo} alt="konbi" className="logo-image" />
           </motion.div>
         </div>
         
