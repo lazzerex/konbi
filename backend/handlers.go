@@ -322,3 +322,54 @@ func handleDownload(c *gin.Context) {
 	c.Header("Content-Type", "application/octet-stream")
 	c.File(filePath)
 }
+
+func handleAdminList(c *gin.Context) {
+	rows, err := db.Query(`
+		SELECT id, type, title, filename, filesize, created_at, expires_at, view_count 
+		FROM content 
+		ORDER BY created_at DESC
+	`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
+	}
+	defer rows.Close()
+
+	var contents []gin.H
+	for rows.Next() {
+		var id, contentType string
+		var title, filename sql.NullString
+		var filesize sql.NullInt64
+		var createdAt, expiresAt time.Time
+		var viewCount int
+
+		if err := rows.Scan(&id, &contentType, &title, &filename, &filesize, &createdAt, &expiresAt, &viewCount); err != nil {
+			continue
+		}
+
+		content := gin.H{
+			"id":         id,
+			"type":       contentType,
+			"created_at": createdAt.Format(time.RFC3339),
+			"expires_at": expiresAt.Format(time.RFC3339),
+			"view_count": viewCount,
+		}
+
+		if title.Valid {
+			content["title"] = title.String
+		}
+		if filename.Valid {
+			content["filename"] = filename.String
+		}
+		if filesize.Valid {
+			content["filesize"] = filesize.Int64
+		}
+
+		contents = append(contents, content)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total":    len(contents),
+		"contents": contents,
+	})
+}
