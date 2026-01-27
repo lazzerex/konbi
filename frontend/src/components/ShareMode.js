@@ -15,6 +15,7 @@ function ShareMode() {
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [copyToast, setCopyToast] = useState(null);
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -120,9 +121,10 @@ function ShareMode() {
     }
   };
 
-  const copyToClipboard = (text) => {
+  const copyToClipboard = (text, type) => {
     navigator.clipboard.writeText(text);
-    alert('Copied to clipboard!');
+    setCopyToast(type === 'id' ? 'Share ID copied to clipboard!' : 'Share URL copied to clipboard!');
+    setTimeout(() => setCopyToast(null), 3000);
   };
 
   const getShareUrl = () => {
@@ -303,17 +305,27 @@ function ShareMode() {
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.3 }}
           >
-            <h3>
-              <HiCheckCircle size={28} />
-              Success!
-            </h3>
+            <div className="result-header">
+              <h3>
+                <HiCheckCircle size={28} />
+                Success!
+              </h3>
+              <motion.button
+                className="close-result"
+                onClick={() => setResult(null)}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+              >
+                <HiX size={20} />
+              </motion.button>
+            </div>
             <div className="result-content">
               <div className="id-display">
                 <label>Share ID:</label>
                 <div className="id-value">
                   <code>{result.id}</code>
                   <motion.button
-                    onClick={() => copyToClipboard(result.id)}
+                    onClick={() => copyToClipboard(result.id, 'id')}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -327,7 +339,7 @@ function ShareMode() {
                 <div className="url-value">
                   <input type="text" value={getShareUrl()} readOnly />
                   <motion.button
-                    onClick={() => copyToClipboard(getShareUrl())}
+                    onClick={() => copyToClipboard(getShareUrl(), 'url')}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -340,6 +352,21 @@ function ShareMode() {
                 Expires: {new Date(result.expiresAt).toLocaleString()}
               </p>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {copyToast && (
+          <motion.div
+            className="copy-toast"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <HiCheckCircle size={20} />
+            {copyToast}
           </motion.div>
         )}
       </AnimatePresence>
