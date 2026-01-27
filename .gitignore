@@ -1,2 +1,6 @@
 uploads/
 *.db
+secret_note.md
+.env
+.env.local
+.env.production
