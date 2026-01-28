@@ -6,10 +6,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/time/rate"
 )
@@ -98,42 +100,83 @@ func main() {
 }
 
 func initDB() (*sql.DB, error) {
-	dbPath := os.Getenv("DB_PATH")
-	if dbPath == "" {
-		dbPath = "./konbi.db"
+	// Check for Neon/PostgreSQL connection string first
+	databaseURL := os.Getenv("DATABASE_URL")
+	var database *sql.DB
+	var err error
+	var schema string
+
+	if databaseURL != "" {
+		// Use PostgreSQL (Neon)
+		log.Println("Using PostgreSQL (Neon) database")
+		database, err = sql.Open("postgres", databaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
+		}
+
+		// Test connection
+		if err = database.Ping(); err != nil {
+			return nil, fmt.Errorf("failed to ping PostgreSQL: %w", err)
+		}
+
+		// PostgreSQL schema
+		schema = `
+		CREATE TABLE IF NOT EXISTS content (
+			id TEXT PRIMARY KEY,
+			type TEXT NOT NULL,
+			title TEXT,
+			filename TEXT,
+			filepath TEXT,
+			filesize BIGINT,
+			content TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			expires_at TIMESTAMP NOT NULL,
+			view_count INTEGER DEFAULT 0
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_expires_at ON content(expires_at);
+		`
+	} else {
+		// Use SQLite (development)
+		log.Println("Using SQLite database")
+		dbPath := os.Getenv("DB_PATH")
+		if dbPath == "" {
+			dbPath = "./konbi.db"
+		}
+
+		// ensure directory exists for database file
+		dbDir := filepath.Dir(dbPath)
+		if err := os.MkdirAll(dbDir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory: %w", err)
+		}
+
+		database, err = sql.Open("sqlite3", dbPath)
+		if err != nil {
+			return nil, err
+		}
+
+		// SQLite schema
+		schema = `
+		CREATE TABLE IF NOT EXISTS content (
+			id TEXT PRIMARY KEY,
+			type TEXT NOT NULL,
+			title TEXT,
+			filename TEXT,
+			filepath TEXT,
+			filesize INTEGER,
+			content TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME NOT NULL,
+			view_count INTEGER DEFAULT 0
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_expires_at ON content(expires_at);
+		`
 	}
 
-	// ensure directory exists for database file
-	dbDir := filepath.Dir(dbPath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create database directory: %w", err)
-	}
-
-	database, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, err
-	}
-
-	// create tables
-	schema := `
-	CREATE TABLE IF NOT EXISTS content (
-		id TEXT PRIMARY KEY,
-		type TEXT NOT NULL,
-		title TEXT,
-		filename TEXT,
-		filepath TEXT,
-		filesize INTEGER,
-		content TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		expires_at DATETIME NOT NULL,
-		view_count INTEGER DEFAULT 0
-	);
-
-	CREATE INDEX IF NOT EXISTS idx_expires_at ON content(expires_at);
-	`
-
+	// Create tables
 	if _, err := database.Exec(schema); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
 
 	return database, nil
