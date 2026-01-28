@@ -15,6 +15,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Helper to convert SQLite ? placeholders to PostgreSQL $1, $2, etc.
+func toSQL(query string) string {
+	// Check if using PostgreSQL
+	if os.Getenv("DATABASE_URL") != "" {
+		// Convert ? to $1, $2, $3...
+		result := ""
+		paramCount := 1
+		for _, char := range query {
+			if char == '?' {
+				result += fmt.Sprintf("$%d", paramCount)
+				paramCount++
+			} else {
+				result += string(char)
+			}
+		}
+		// Replace SQLite datetime('now') with PostgreSQL now()
+		result = strings.ReplaceAll(result, "datetime('now')", "now()")
+		return result
+	}
+	return query
+}
+
 const (
 	maxFileSize    = 50 * 1024 * 1024 // 50MB
 	expirationDays = 7
@@ -90,7 +112,7 @@ func handleUpload(c *gin.Context) {
 
 	// Check for ID collision
 	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM content WHERE id = ?)", id).Scan(&exists)
+	err = db.QueryRow(toSQL("SELECT EXISTS(SELECT 1 FROM content WHERE id = ?)"), id).Scan(&exists)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -120,10 +142,10 @@ func handleUpload(c *gin.Context) {
 
 	// save metadata to db
 	expiresAt := time.Now().UTC().Add(expirationDays * 24 * time.Hour)
-	_, err = db.Exec(`
+	_, err = db.Exec(toSQL(`
 		INSERT INTO content (id, type, filename, filepath, filesize, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?)
-	`, id, "file", header.Filename, filePath, header.Size, expiresAt.Format("2006-01-02 15:04:05"))
+	`), id, "file", header.Filename, filePath, header.Size, expiresAt.Format("2006-01-02 15:04:05"))
 
 	if err != nil {
 		os.Remove(filePath)
@@ -165,7 +187,7 @@ func handleNote(c *gin.Context) {
 
 	// check for id collision
 	var exists bool
-	err = db.QueryRow("SELECT EXISTS(SELECT 1 FROM content WHERE id = ?)", id).Scan(&exists)
+	err = db.QueryRow(toSQL("SELECT EXISTS(SELECT 1 FROM content WHERE id = ?)"), id).Scan(&exists)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
@@ -178,10 +200,10 @@ func handleNote(c *gin.Context) {
 
 	// save to db
 	expiresAt := time.Now().UTC().Add(expirationDays * 24 * time.Hour)
-	_, err = db.Exec(`
+	_, err = db.Exec(toSQL(`
 		INSERT INTO content (id, type, title, content, expires_at)
 		VALUES (?, ?, ?, ?, ?)
-	`, id, "note", req.Title, req.Content, expiresAt.Format("2006-01-02 15:04:05"))
+	`), id, "note", req.Title, req.Content, expiresAt.Format("2006-01-02 15:04:05"))
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save note"})
@@ -207,11 +229,11 @@ func handleGetContent(c *gin.Context) {
 	var title, filename, filePath, content sql.NullString
 	var filesize sql.NullInt64
 
-	err := db.QueryRow(`
+	err := db.QueryRow(toSQL(`
 		SELECT type, title, filename, filepath, filesize, content
 		FROM content
 		WHERE id = ? AND expires_at > ?
-	`, id, time.Now().UTC().Format("2006-01-02 15:04:05")).Scan(&contentType, &title, &filename, &filePath, &filesize, &content)
+	`), id, time.Now().UTC().Format("2006-01-02 15:04:05")).Scan(&contentType, &title, &filename, &filePath, &filesize, &content)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Content not found or expired"})
@@ -223,7 +245,7 @@ func handleGetContent(c *gin.Context) {
 	}
 
 	// increment view count
-	db.Exec("UPDATE content SET view_count = view_count + 1 WHERE id = ?", id)
+	db.Exec(toSQL("UPDATE content SET view_count = view_count + 1 WHERE id = ?"), id)
 
 	if contentType == "note" {
 		c.JSON(http.StatusOK, gin.H{
@@ -253,11 +275,11 @@ func handleGetStats(c *gin.Context) {
 	var viewCount int
 	var createdAt, expiresAt time.Time
 
-	err := db.QueryRow(`
+	err := db.QueryRow(toSQL(`
 		SELECT view_count, created_at, expires_at
 		FROM content
 		WHERE id = ?
-	`, id).Scan(&viewCount, &createdAt, &expiresAt)
+	`), id).Scan(&viewCount, &createdAt, &expiresAt)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Content not found"})
@@ -286,11 +308,11 @@ func handleDownload(c *gin.Context) {
 	var filename, filePath string
 	var contentType string
 
-	err := db.QueryRow(`
+	err := db.QueryRow(toSQL(`
 		SELECT filename, filepath, type
 		FROM content
 		WHERE id = ? AND expires_at > datetime('now')
-	`, id).Scan(&filename, &filePath, &contentType)
+	`), id).Scan(&filename, &filePath, &contentType)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Content not found or expired"})
@@ -313,7 +335,7 @@ func handleDownload(c *gin.Context) {
 	}
 
 	// increment view count
-	db.Exec("UPDATE content SET view_count = view_count + 1 WHERE id = ?", id)
+	db.Exec(toSQL("UPDATE content SET view_count = view_count + 1 WHERE id = ?"), id)
 
 	// serve file for download
 	c.Header("Content-Description", "File Transfer")
@@ -337,11 +359,11 @@ func handleAdminList(c *gin.Context) {
 		return
 	}
 
-	rows, err := db.Query(`
+	rows, err := db.Query(toSQL(`
 		SELECT id, type, title, filename, filesize, created_at, expires_at, view_count 
 		FROM content 
 		ORDER BY created_at DESC
-	`)
+	`))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
