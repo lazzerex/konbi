@@ -22,7 +22,7 @@
 
 <p align="center">
   <strong>Live Application</strong><br/>
-  Frontend deployed on <strong>Vercel</strong> | Backend deployed on <strong>Railway</strong>
+  Frontend deployed on <strong>Vercel</strong> | Backend deployed on <strong>Railway</strong> | Database managed with <strong>Neon</strong>
 </p>
 <img width="1184" height="693" alt="konbi1" src="https://github.com/user-attachments/assets/3c52e1a3-f29a-4e0a-b790-99dca741f4ef" />
 <img width="1177" height="689" alt="konbi3" src="https://github.com/user-attachments/assets/79eaef47-a80d-4ff9-98a9-3da43f41b3e1" />
@@ -62,7 +62,7 @@
 **Backend:**
 - Go (Golang)
 - Gin web framework
-- SQLite database
+- PostgreSQL (Neon) or SQLite database
 - Local filesystem storage
 - Deployed on Railway
 
@@ -135,8 +135,11 @@ go run .
 The server will start on `http://localhost:8080`
 
 **Environment Variables:**
+- `DATABASE_URL` - PostgreSQL connection string (for Neon/PostgreSQL)
 - `PORT` - Server port (default: 8080)
-- `DB_PATH` - Database file path (default: ./konbi.db)
+- `DB_PATH` - SQLite database file path (default: ./konbi.db, used if DATABASE_URL not set)
+- `ADMIN_SECRET` - Secret for admin endpoints (optional)
+- `ALLOWED_ORIGINS` - CORS allowed origins (default: http://localhost:3000)
 
 ### Frontend Setup
 
@@ -293,24 +296,30 @@ REACT_APP_API_URL=https://your-railway-backend-url.up.railway.app/api
 
 1. Push your code to GitHub
 
-2. Go to [Railway.app](https://railway.app)
+2. Create a free Neon database:
+   - Go to [neon.tech](https://neon.tech) and create an account
+   - Create a new project
+   - Copy the connection string
 
-3. Click "New Project" → "Deploy from GitHub repo"
+3. Go to [Railway.app](https://railway.app)
 
-4. Select your repository
+4. Click "New Project" → "Deploy from GitHub repo"
 
-5. Railway will automatically:
+5. Select your repository
+
+6. Railway will automatically:
    - Detect the Go application
    - Use the `railway.toml` configuration
    - Set up the build and deployment
 
-6. Configure environment variables (optional):
-   - `PORT` - Railway sets this automatically
-   - `DB_PATH` - Path for SQLite database
+7. Configure environment variables in Railway dashboard:
+   - `DATABASE_URL` - Your Neon PostgreSQL connection string
+   - `ADMIN_SECRET` - Random secret for admin endpoints (optional)
+   - `ALLOWED_ORIGINS` - Your Vercel frontend URL
 
-7. Your backend will be live with a Railway URL
+8. Your backend will be live with a Railway URL
 
-**Note:** Railway provides persistent volumes for SQLite database storage.
+**Note:** Using Neon database provides better performance and data persistence compared to SQLite. The backend automatically detects and uses PostgreSQL when `DATABASE_URL` is set.
 
 ### Backend (Fly.io)
 
@@ -364,19 +373,22 @@ Vercel (Frontend - React SPA)
      ↓
 Railway (Backend - Go API)
      ↓
-SQLite Database (Persistent Volume)
+Neon (PostgreSQL Database)
      ↓
-File Storage (Railway Volume)
+File Storage (Railway Volume/Local)
 ```
 
 **Key Features in Production:**
 - HTTPS encryption on both frontend and backend
 - CORS configured for secure cross-origin requests
-- Rate limiting to prevent abuse
+- Rate limiting to prevent abuse (10 req/sec)
 - Automatic HTTPS redirects
 - CDN distribution via Vercel
-- Persistent storage on Railway
+- Serverless PostgreSQL database via Neon
+- Auto-scaling database with Neon
+- Protected admin endpoints with secret authentication
 - Automatic deployments from GitHub
+- Security: npm packages updated and vulnerabilities patched
 
 ## Configuration
 
@@ -410,7 +422,12 @@ limiter = rate.NewLimiter(rate.Every(time.Second), 10)  // 10 requests per secon
 
 ## Database
 
-The app uses SQLite by default. The database schema includes:
+The app supports both **PostgreSQL** (production) and **SQLite** (development):
+
+- **PostgreSQL (Neon)**: Automatically used when `DATABASE_URL` environment variable is set
+- **SQLite**: Used for local development when `DATABASE_URL` is not set
+
+The database schema includes:
 
 ```sql
 CREATE TABLE content (
@@ -419,53 +436,89 @@ CREATE TABLE content (
     title TEXT,
     filename TEXT,
     filepath TEXT,
-    filesize INTEGER,
+    filesize INTEGER,             -- BIGINT in PostgreSQL
     content TEXT,
-    created_at DATETIME,
-    expires_at DATETIME NOT NULL,
+    created_at DATETIME,          -- TIMESTAMP in PostgreSQL
+    expires_at DATETIME NOT NULL, -- TIMESTAMP in PostgreSQL
     view_count INTEGER DEFAULT 0
 );
 ```
 
-### Migrating to PostgreSQL
+### Using Neon PostgreSQL (Recommended)
 
-To use PostgreSQL instead of SQLite:
+1. Create free Neon account at [neon.tech](https://neon.tech)
+2. Create a new project (Postgres 17 recommended)
+3. Copy the connection string
+4. Set as environment variable:
+   ```bash
+   export DATABASE_URL="postgresql://user:pass@host.neon.tech/dbname?sslmode=require"
+   ```
+5. Run your backend - it will automatically use PostgreSQL
 
-1. Install PostgreSQL driver:
+**Benefits of Neon:**
+- Free tier with 0.5GB storage
+- Auto-scaling and serverless
+- Better performance for concurrent requests
+- Automatic backups
+- Database branching for development
+- No vendor lock-in (migrate to any hosting platform)
+
+### Using SQLite (Development)
+
+For local development, simply run without `DATABASE_URL`:
 ```bash
-go get github.com/lib/pq
+cd backend
+go run .
 ```
 
-2. Update imports in `main.go`:
-```go
-import _ "github.com/lib/pq"
-```
-
-3. Change connection string:
-```go
-db, err := sql.Open("postgres", "postgres://user:pass@host:5432/dbname?sslmode=disable")
-```
+The backend will automatically create and use `konbi.db` locally.
 
 ## Maintenance
 
 ### Manual Cleanup
 
 Delete expired content manually:
+
+**SQLite (local):**
 ```bash
-# In backend directory
 sqlite3 konbi.db "DELETE FROM content WHERE expires_at < datetime('now')"
+```
+
+**PostgreSQL (via psql):**
+```bash
+psql $DATABASE_URL -c "DELETE FROM content WHERE expires_at < now()"
+```
+
+**Via Admin API:**
+```bash
+# First, view all content
+curl -H "X-Admin-Secret: your-secret" \
+  https://your-backend.up.railway.app/api/admin/list
 ```
 
 ### Backup Database
 
+**SQLite:**
 ```bash
 sqlite3 konbi.db ".backup konbi_backup.db"
 ```
 
+**PostgreSQL (Neon):**
+Neon provides automatic backups with point-in-time recovery. You can also export manually:
+```bash
+pg_dump $DATABASE_URL > konbi_backup.sql
+```
+
 ### View All Content
 
+**SQLite:**
 ```bash
 sqlite3 konbi.db "SELECT id, type, filename, title, created_at, expires_at FROM content"
+```
+
+**PostgreSQL:**
+```bash
+psql $DATABASE_URL -c "SELECT id, type, filename, title, created_at, expires_at FROM content"
 ```
 
 ## Development
@@ -521,6 +574,54 @@ Change the port:
 PORT=3001 go run .  # Backend
 PORT=3002 npm start  # Frontend
 ```
+
+### npm Vulnerabilities
+
+The frontend dependencies are kept up-to-date with security patches. If you see warnings:
+```bash
+cd frontend
+npm audit
+```
+
+The project uses npm overrides to patch vulnerable dependencies in react-scripts.
+
+## Migration Guide
+
+### From Railway to Fly.io/Render
+
+Since the database is on Neon (separate from hosting), migration is simple:
+
+1. Deploy backend to new platform (Fly.io/Render)
+2. Set the **same** `DATABASE_URL` environment variable
+3. Update frontend's `REACT_APP_API_URL` to new backend URL
+4. Done! No data migration needed.
+
+### From SQLite to Neon
+
+If you're currently using SQLite and want to migrate to Neon:
+
+1. Export SQLite data:
+   ```bash
+   sqlite3 konbi.db .dump > export.sql
+   ```
+
+2. Create Neon database and set `DATABASE_URL`
+
+3. The backend will automatically create tables on startup
+
+4. Import data if needed (manual process for schema differences)
+
+Note: Since content expires after 7 days, starting fresh is often acceptable.
+
+## Security
+
+- **Admin Endpoints**: Protected by `X-Admin-Secret` header authentication
+- **Rate Limiting**: 10 requests per second per IP
+- **File Validation**: Whitelisted file extensions only
+- **Size Limits**: 50MB max file size
+- **CORS**: Configured for specific origins in production
+- **Dependencies**: Regularly updated, security vulnerabilities patched
+- **HTTPS**: Enforced in production via Vercel and Railway
 
 ## Contributing
 
