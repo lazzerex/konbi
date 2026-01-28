@@ -11,10 +11,13 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat&logo=go&logoColor=white"/>
   <img src="https://img.shields.io/badge/React-18.2-61DAFB?style=flat&logo=react&logoColor=black"/>
-  <img src="https://img.shields.io/badge/License-MIT-green?style=flat"/>
-  <img src="https://img.shields.io/badge/Deployed%20on-Vercel-black?style=flat&logo=vercel&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Backend-Railway-0B0D0E?style=flat&logo=railway&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Database-Neon-00E699?style=flat&logo=postgresql&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Backend-Railway-7B3FE4?style=flat&logo=railway&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Deployed%20on-Vercel-000000?style=flat&logo=vercel&logoColor=white"/>
+  <img src="https://img.shields.io/badge/License-MIT-F7DF1E?style=flat&logoColor=black"/>
 </p>
+>
+
 
 <p align="center">
   <strong>A minimal, elegant web application for sharing files and text notes online with zero friction. Upload files or create notes and instantly get a shareable link.</strong>
