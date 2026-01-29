@@ -1,0 +1,21 @@
+{
+  "short_name": "Konbi",
+  "name": "Konbi - Share Files & Notes",
+  "description": "A minimal, elegant web application for sharing files and text notes online with zero friction",
+  "icons": [
+    {
+      "src": "konbi_favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "konbi_favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#3b82f6",
+  "background_color": "#ffffff"
+}
