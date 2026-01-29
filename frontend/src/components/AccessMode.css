@@ -21,6 +21,7 @@
 }
 
 .search-section h2 {
+  font-family: 'Poppins', sans-serif;
   font-size: 2.25rem;
   color: var(--text-primary);
   margin: 0;
@@ -136,6 +137,7 @@
 }
 
 .content-header h3 {
+  font-family: 'Poppins', sans-serif;
   color: var(--text-primary);
   font-size: 20px;
   margin: 0;
@@ -194,6 +196,7 @@
 }
 
 .file-display h3 {
+  font-family: 'Poppins', sans-serif;
   color: var(--text-primary);
   font-size: 20px;
   margin-bottom: 12px;
