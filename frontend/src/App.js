@@ -50,31 +50,6 @@ function App() {
 
   return (
     <div className="App">
-      <motion.div 
-        className="background-blur blur-1"
-        animate={{ 
-          scale: [1, 1.2, 1],
-          rotate: [0, 90, 0]
-        }}
-        transition={{ 
-          duration: 20, 
-          repeat: Infinity,
-          ease: "linear" 
-        }}
-      />
-      <motion.div 
-        className="background-blur blur-2"
-        animate={{ 
-          scale: [1, 1.3, 1],
-          rotate: [180, 270, 180]
-        }}
-        transition={{ 
-          duration: 25, 
-          repeat: Infinity,
-          ease: "linear" 
-        }}
-      />
-
       {/* Integrated Header with Actions */}
       <motion.header 
         className="App-header"
