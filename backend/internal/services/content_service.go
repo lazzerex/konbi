@@ -184,7 +184,7 @@ func (s *ContentService) CleanupExpired(ctx context.Context) (int, error) {
 	s.logger.Info("starting cleanup of expired content")
 
 	// find expired file content
-	expiredContent, err := s.repo.FindExpiredFileContent(ctx)
+	expiredContent, err := s.repo.FindExpiredContent(ctx)
 	if err != nil {
 		return 0, err
 	}
