@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Deployed%20on-Vercel-000000?style=flat&logo=vercel&logoColor=white"/>
   <img src="https://img.shields.io/badge/License-MIT-F7DF1E?style=flat&logoColor=black"/>
 </p>
->
+
 
 
 <p align="center">
@@ -74,11 +74,30 @@
 ```
 konbi/
 ├── backend/
-│   ├── main.go              # Server setup and initialization
-│   ├── handlers.go          # API endpoint handlers
-│   ├── go.mod               # Go dependencies
-│   ├── Dockerfile           # Backend Docker config
-│   └── railway.toml         # Railway deployment config
+│   ├── main.go                          # Application entry point
+│   ├── internal/
+│   │   ├── config/                      # Configuration management
+│   │   │   └── config.go
+│   │   ├── models/                      # Data structures
+│   │   │   └── content.go
+│   │   ├── errors/                      # Custom error types
+│   │   │   └── errors.go
+│   │   ├── repository/                  # Database layer
+│   │   │   ├── db.go
+│   │   │   └── content_repository.go
+│   │   ├── services/                    # Business logic
+│   │   │   └── content_service.go
+│   │   ├── handlers/                    # HTTP handlers
+│   │   │   ├── content_handler.go
+│   │   │   └── health.go
+│   │   └── middleware/                  # Custom middleware
+│   │       ├── auth.go
+│   │       ├── logger.go
+│   │       └── ratelimit.go
+│   ├── uploads/                         # Uploaded files storage
+│   ├── go.mod                           # Go dependencies
+│   ├── Dockerfile                       # Backend Docker config
+│   └── railway.toml                     # Railway deployment config
 ├── frontend/
 │   ├── public/
 │   │   └── index.html
@@ -97,6 +116,36 @@ konbi/
 │   └── vercel.json              # Vercel deployment config
 └── docker-compose.yml           # Local development setup
 ```
+
+## Architecture
+
+The backend follows **clean architecture** principles with clear separation of concerns:
+
+```
+┌─────────────┐
+│  HTTP Layer │  ← Handlers (routes, request/response)
+└──────┬──────┘
+       │
+┌──────▼──────┐
+│ Service Layer│  ← Business logic, validation
+└──────┬──────┘
+       │
+┌──────▼──────┐
+│Repository   │  ← Database operations
+└──────┬──────┘
+       │
+┌──────▼──────┐
+│  Database   │  ← PostgreSQL/SQLite
+└─────────────┘
+```
+
+**Key Features:**
+- **Structured Logging**: All requests logged with request ID, latency, status
+- **Custom Error Types**: Proper HTTP status codes and error messages
+- **Middleware**: Rate limiting, logging, authentication
+- **Database Abstraction**: Works with both PostgreSQL and SQLite
+- **Connection Pooling**: Optimized database connections
+- **Graceful Shutdown**: Proper cleanup on server stop
 
 ## Getting Started
 
@@ -132,7 +181,11 @@ go mod download
 
 3. Run the backend server:
 ```bash
+# Simple run
 go run .
+
+# With environment variables
+ENVIRONMENT=development PORT=8080 ADMIN_SECRET=your-secret go run .
 ```
 
 The server will start on `http://localhost:8080`
@@ -140,9 +193,14 @@ The server will start on `http://localhost:8080`
 **Environment Variables:**
 - `DATABASE_URL` - PostgreSQL connection string (for Neon/PostgreSQL)
 - `PORT` - Server port (default: 8080)
-- `DB_PATH` - SQLite database file path (default: ./konbi.db, used if DATABASE_URL not set)
+- `ENVIRONMENT` - Environment mode: development or production (default: development)
 - `ADMIN_SECRET` - Secret for admin endpoints (optional)
 - `ALLOWED_ORIGINS` - CORS allowed origins (default: http://localhost:3000)
+- `MAX_FILE_SIZE_MB` - Max upload size in MB (default: 50)
+- `EXPIRATION_DAYS` - Content expiration time (default: 7)
+- `RATE_LIMIT_PER_SEC` - Rate limit per second (default: 10)
+- `DB_MAX_CONNECTIONS` - Max database connections (default: 25)
+- `DB_MAX_IDLE_CONNS` - Max idle connections (default: 5)
 
 ### Frontend Setup
 
@@ -396,19 +454,29 @@ File Storage (Railway Volume/Local)
 ## Configuration
 
 ### Expiration Time
-Change content expiration in [backend/handlers.go](backend/handlers.go):
+Change content expiration in [backend/internal/config/config.go](backend/internal/config/config.go):
 ```go
-const expirationDays = 7  // Change to desired number of days
+ExpirationDays: getEnvAsInt("EXPIRATION_DAYS", 7),  // Change default value
+```
+
+Or set via environment variable:
+```bash
+EXPIRATION_DAYS=14 go run .
 ```
 
 ### File Size Limit
-Modify in [backend/handlers.go](backend/handlers.go):
+Modify in [backend/internal/config/config.go](backend/internal/config/config.go):
 ```go
-const maxFileSize = 50 * 1024 * 1024  // 50MB in bytes
+MaxFileSize: int64(getEnvAsInt("MAX_FILE_SIZE_MB", 50)) * 1024 * 1024,
+```
+
+Or set via environment variable:
+```bash
+MAX_FILE_SIZE_MB=100 go run .
 ```
 
 ### Allowed File Types
-Edit the `allowedExtensions` map in [backend/handlers.go](backend/handlers.go):
+Edit the `allowedExtensions` map in [backend/internal/services/content_service.go](backend/internal/services/content_service.go):
 ```go
 var allowedExtensions = map[string]bool{
     ".txt": true,
@@ -418,9 +486,9 @@ var allowedExtensions = map[string]bool{
 ```
 
 ### Rate Limiting
-Adjust in [backend/main.go](backend/main.go):
-```go
-limiter = rate.NewLimiter(rate.Every(time.Second), 10)  // 10 requests per second
+Adjust in [backend/internal/config/config.go](backend/internal/config/config.go) or set via environment:
+```bash
+RATE_LIMIT_PER_SEC=20 RATE_LIMIT_BURST=20 go run .
 ```
 
 ## Database
@@ -443,9 +511,20 @@ CREATE TABLE content (
     content TEXT,
     created_at DATETIME,          -- TIMESTAMP in PostgreSQL
     expires_at DATETIME NOT NULL, -- TIMESTAMP in PostgreSQL
-    view_count INTEGER DEFAULT 0
+    view_count INTEGER DEFAULT 0,
+    deleted_at DATETIME           -- TIMESTAMP in PostgreSQL, for soft deletes
 );
+
+-- Performance indexes
+CREATE INDEX idx_content_expires_at ON content(expires_at);
+CREATE INDEX idx_content_deleted_at ON content(deleted_at);
+CREATE INDEX idx_content_type ON content(type);
+CREATE INDEX idx_content_created_at ON content(created_at DESC);
 ```
+
+**Automatic Migrations**: The application automatically creates tables and indexes on startup. Database migrations run in [backend/internal/repository/db.go](backend/internal/repository/db.go).
+
+**Soft Deletes**: Content is marked as deleted (not permanently removed) for data retention and audit trails.
 
 ### Using Neon PostgreSQL (Recommended)
 
