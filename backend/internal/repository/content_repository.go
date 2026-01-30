@@ -35,12 +35,32 @@ func (r *ContentRepository) nowFunc() string {
 	return "datetime('now')"
 }
 
+// helper to convert ? placeholders to postgresql $1, $2, etc
+func (r *ContentRepository) convertQuery(query string) string {
+	if !r.isPostgres {
+		return query
+	}
+	
+	// convert ? to $1, $2, $3...
+	result := ""
+	paramCount := 1
+	for _, char := range query {
+		if char == '?' {
+			result += fmt.Sprintf("$%d", paramCount)
+			paramCount++
+		} else {
+			result += string(char)
+		}
+	}
+	return result
+}
+
 // create inserts new content record
 func (r *ContentRepository) Create(ctx context.Context, content *models.Content) error {
-	query := `
+	query := r.convertQuery(`
 		INSERT INTO content (id, type, title, filename, filepath, filesize, content, expires_at, view_count)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
-	`
+	`)
 
 	_, err := r.db.ExecContext(ctx, query,
 		content.ID,
@@ -68,11 +88,11 @@ func (r *ContentRepository) Create(ctx context.Context, content *models.Content)
 
 // find by id retrieves content by id
 func (r *ContentRepository) FindByID(ctx context.Context, id string) (*models.Content, error) {
-	query := fmt.Sprintf(`
+	query := r.convertQuery(fmt.Sprintf(`
 		SELECT id, type, title, filename, filepath, filesize, content, created_at, expires_at, view_count, deleted_at
 		FROM content
 		WHERE id = ? AND (deleted_at IS NULL OR deleted_at > %s)
-	`, r.nowFunc())
+	`, r.nowFunc()))
 
 	content := &models.Content{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -102,11 +122,11 @@ func (r *ContentRepository) FindByID(ctx context.Context, id string) (*models.Co
 
 // find active by id retrieves non-expired content
 func (r *ContentRepository) FindActiveByID(ctx context.Context, id string) (*models.Content, error) {
-	query := fmt.Sprintf(`
+	query := r.convertQuery(fmt.Sprintf(`
 		SELECT id, type, title, filename, filepath, filesize, content, created_at, expires_at, view_count, deleted_at
 		FROM content
 		WHERE id = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
-	`, r.nowFunc(), r.nowFunc())
+	`, r.nowFunc(), r.nowFunc()))
 
 	content := &models.Content{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -137,7 +157,8 @@ func (r *ContentRepository) FindActiveByID(ctx context.Context, id string) (*mod
 // id exists checks if content id already exists
 func (r *ContentRepository) IDExists(ctx context.Context, id string) (bool, error) {
 	var exists bool
-	err := r.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM content WHERE id = ?)", id).Scan(&exists)
+	query := r.convertQuery("SELECT EXISTS(SELECT 1 FROM content WHERE id = ?)")
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&exists)
 	if err != nil {
 		r.logger.WithError(err).WithField("content_id", id).Error("failed to check id existence")
 		return false, errors.NewInternalError("database error", err)
@@ -147,7 +168,8 @@ func (r *ContentRepository) IDExists(ctx context.Context, id string) (bool, erro
 
 // increment view count increases view counter
 func (r *ContentRepository) IncrementViewCount(ctx context.Context, id string) error {
-	_, err := r.db.ExecContext(ctx, "UPDATE content SET view_count = view_count + 1 WHERE id = ?", id)
+	query := r.convertQuery("UPDATE content SET view_count = view_count + 1 WHERE id = ?")
+	_, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		r.logger.WithError(err).WithField("content_id", id).Error("failed to increment view count")
 		return errors.NewInternalError("failed to update view count", err)
@@ -195,13 +217,13 @@ func (r *ContentRepository) ListAll(ctx context.Context) ([]*models.Content, err
 	return contents, nil
 }
 
-// find expired file content retrieves expired file records for cleanup
-func (r *ContentRepository) FindExpiredFileContent(ctx context.Context) ([]*models.Content, error) {
-	query := fmt.Sprintf(`
+// find expired content retrieves expired file content
+func (r *ContentRepository) FindExpiredContent(ctx context.Context) ([]*models.Content, error) {
+	query := r.convertQuery(fmt.Sprintf(`
 		SELECT id, filepath
 		FROM content
 		WHERE expires_at < %s AND type = ? AND (deleted_at IS NULL OR deleted_at > %s)
-	`, r.nowFunc(), r.nowFunc())
+	`, r.nowFunc(), r.nowFunc()))
 
 	rows, err := r.db.QueryContext(ctx, query, models.ContentTypeFile)
 	if err != nil {
@@ -226,7 +248,7 @@ func (r *ContentRepository) FindExpiredFileContent(ctx context.Context) ([]*mode
 
 // soft delete marks content as deleted
 func (r *ContentRepository) SoftDelete(ctx context.Context, id string) error {
-	query := fmt.Sprintf("UPDATE content SET deleted_at = %s WHERE id = ?", r.nowFunc())
+	query := r.convertQuery(fmt.Sprintf("UPDATE content SET deleted_at = %s WHERE id = ?", r.nowFunc()))
 	result, err := r.db.ExecContext(ctx, query, id)
 	if err != nil {
 		r.logger.WithError(err).WithField("content_id", id).Error("failed to soft delete content")
