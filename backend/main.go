@@ -1,245 +1,216 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
-	"log"
+	"konbi/internal/config"
+	"konbi/internal/handlers"
+	"konbi/internal/middleware"
+	"konbi/internal/repository"
+	"konbi/internal/services"
+	"net/http"
 	"os"
-	"path/filepath"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
-	"golang.org/x/time/rate"
-)
-
-var (
-	db      *sql.DB
-	limiter = rate.NewLimiter(rate.Every(time.Second), 10) // 10 requests per second
+	"github.com/sirupsen/logrus"
 )
 
 func main() {
-	var err error
+	// initialize logger
+	logger := setupLogger()
+	logger.Info("starting konbi application")
 
-	// init database
-	db, err = initDB()
+	// load configuration
+	cfg := config.Load()
+	logger.WithFields(logrus.Fields{
+		"environment": cfg.Server.Environment,
+		"port":        cfg.Server.Port,
+	}).Info("configuration loaded")
+
+	// initialize database
+	ctx := context.Background()
+	dbManager := repository.NewDBManager(logger)
+	db, err := dbManager.Initialize(ctx, cfg.Database.URL)
 	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		logger.WithError(err).Fatal("failed to initialize database")
 	}
-	defer db.Close()
+	defer dbManager.Close()
+
+	// configure connection pool
+	dbManager.ConfigurePool(
+		cfg.Database.MaxConnections,
+		cfg.Database.MaxIdleConns,
+		int(cfg.Database.ConnMaxLife.Minutes()),
+	)
+
+	// run database migrations
+	if err := dbManager.RunMigrations(ctx); err != nil {
+		logger.WithError(err).Fatal("failed to run migrations")
+	}
 
 	// ensure uploads directory exists
-	if err := os.MkdirAll("uploads", 0755); err != nil {
-		log.Fatalf("Failed to create uploads directory: %v", err)
+	if err := os.MkdirAll(cfg.Storage.UploadDir, 0755); err != nil {
+		logger.WithError(err).Fatal("failed to create uploads directory")
 	}
 
-	// start cleanup routine
-	go cleanupExpiredContent()
+	// initialize repositories
+	contentRepo := repository.NewContentRepository(db, logger)
+
+	// initialize services
+	contentService := services.NewContentService(contentRepo, cfg, logger)
+
+	// initialize handlers
+	contentHandler := handlers.NewContentHandler(contentService, logger)
+
+	// initialize middlewares
+	loggerMiddleware := middleware.NewLoggerMiddleware(logger)
+	rateLimiter := middleware.NewRateLimiter(cfg.Security.RateLimitPerSec, cfg.Security.RateLimitBurst, logger)
+	adminAuth := middleware.NewAdminAuth(cfg, logger)
 
 	// setup router
-	r := gin.Default()
+	r := setupRouter(cfg, contentHandler, loggerMiddleware, rateLimiter, adminAuth)
 
-	// cors config
-	config := cors.DefaultConfig()
-	allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
-	if allowedOrigins != "" {
-		config.AllowOrigins = []string{allowedOrigins}
+	// start cleanup routine
+	go startCleanupRoutine(contentService, logger)
+
+	// start server with graceful shutdown
+	startServer(r, cfg, logger)
+}
+
+// setup logger configures structured logging
+func setupLogger() *logrus.Logger {
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger.SetOutput(os.Stdout)
+
+	// set log level based on environment
+	env := os.Getenv("ENVIRONMENT")
+	if env == "development" {
+		logger.SetLevel(logrus.DebugLevel)
+		logger.SetFormatter(&logrus.TextFormatter{
+			FullTimestamp: true,
+		})
 	} else {
-		// Development fallback
-		config.AllowOrigins = []string{"http://localhost:3000"}
+		logger.SetLevel(logrus.InfoLevel)
 	}
-	config.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Content-Length", "Accept", "X-Admin-Secret"}
-	r.Use(cors.New(config))
 
-	// rate limiting
-	r.Use(rateLimitMiddleware())
+	return logger
+}
+
+// setup router configures gin router with middleware and routes
+func setupRouter(
+	cfg *config.Config,
+	contentHandler *handlers.ContentHandler,
+	loggerMiddleware *middleware.LoggerMiddleware,
+	rateLimiter *middleware.RateLimiter,
+	adminAuth *middleware.AdminAuth,
+) *gin.Engine {
+	// set gin mode based on environment
+	if cfg.Server.Environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	r := gin.New()
+	r.Use(gin.Recovery())
+
+	// cors configuration
+	corsConfig := cors.DefaultConfig()
+	if cfg.Server.AllowedOrigins != "" {
+		corsConfig.AllowOrigins = []string{cfg.Server.AllowedOrigins}
+	} else {
+		corsConfig.AllowOrigins = []string{"http://localhost:3000"}
+	}
+	corsConfig.AllowMethods = []string{"GET", "POST", "OPTIONS"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Content-Length", "Accept", "X-Admin-Secret"}
+	r.Use(cors.New(corsConfig))
+
+	// global middleware
+	r.Use(loggerMiddleware.Middleware())
+	r.Use(rateLimiter.Middleware())
+
+	// public routes
+	r.GET("/", handlers.Root)
+	r.GET("/health", handlers.HealthCheck)
 
 	// api routes
 	api := r.Group("/api")
 	{
-		api.POST("/upload", handleUpload)
-		api.POST("/note", handleNote)
-		api.GET("/content/:id", handleGetContent)
-		api.GET("/content/:id/download", handleDownload)
-		api.GET("/stats/:id", handleGetStats)
-		api.GET("/admin/list", handleAdminList)
+		api.POST("/upload", contentHandler.Upload)
+		api.POST("/note", contentHandler.Note)
+		api.GET("/content/:id", contentHandler.GetContent)
+		api.GET("/content/:id/download", contentHandler.Download)
+		api.GET("/stats/:id", contentHandler.GetStats)
+
+		// admin routes
+		admin := api.Group("/admin")
+		admin.Use(adminAuth.Middleware())
+		{
+			admin.GET("/list", contentHandler.ListAdmin)
+		}
 	}
 
-	// root route
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "Konbi API",
-			"version": "1.0",
-			"endpoints": gin.H{
-				"health":  "/health",
-				"upload":  "POST /api/upload",
-				"note":    "POST /api/note",
-				"content": "GET /api/content/:id",
-			},
-		})
-	})
-
-	// health check
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	log.Printf("Server starting on port %s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	return r
 }
 
-func initDB() (*sql.DB, error) {
-	// Check for Neon/PostgreSQL connection string first
-	databaseURL := os.Getenv("DATABASE_URL")
-	var database *sql.DB
-	var err error
-	var schema string
-
-	if databaseURL != "" {
-		// Use PostgreSQL (Neon)
-		log.Println("Using PostgreSQL (Neon) database")
-		database, err = sql.Open("postgres", databaseURL)
-		if err != nil {
-			return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
-		}
-
-		// Test connection
-		if err = database.Ping(); err != nil {
-			return nil, fmt.Errorf("failed to ping PostgreSQL: %w", err)
-		}
-
-		// PostgreSQL schema
-		schema = `
-		CREATE TABLE IF NOT EXISTS content (
-			id TEXT PRIMARY KEY,
-			type TEXT NOT NULL,
-			title TEXT,
-			filename TEXT,
-			filepath TEXT,
-			filesize BIGINT,
-			content TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			expires_at TIMESTAMP NOT NULL,
-			view_count INTEGER DEFAULT 0
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_expires_at ON content(expires_at);
-		`
-	} else {
-		// Use SQLite (development)
-		log.Println("Using SQLite database")
-		dbPath := os.Getenv("DB_PATH")
-		if dbPath == "" {
-			dbPath = "./konbi.db"
-		}
-
-		// ensure directory exists for database file
-		dbDir := filepath.Dir(dbPath)
-		if err := os.MkdirAll(dbDir, 0755); err != nil {
-			return nil, fmt.Errorf("failed to create database directory: %w", err)
-		}
-
-		database, err = sql.Open("sqlite3", dbPath)
-		if err != nil {
-			return nil, err
-		}
-
-		// SQLite schema
-		schema = `
-		CREATE TABLE IF NOT EXISTS content (
-			id TEXT PRIMARY KEY,
-			type TEXT NOT NULL,
-			title TEXT,
-			filename TEXT,
-			filepath TEXT,
-			filesize INTEGER,
-			content TEXT,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-			expires_at DATETIME NOT NULL,
-			view_count INTEGER DEFAULT 0
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_expires_at ON content(expires_at);
-		`
-	}
-
-	// Create tables
-	if _, err := database.Exec(schema); err != nil {
-		return nil, fmt.Errorf("failed to create tables: %w", err)
-	}
-
-	return database, nil
-}
-
-func rateLimitMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if !limiter.Allow() {
-			c.JSON(429, gin.H{"error": "Rate limit exceeded"})
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
-}
-
-func cleanupExpiredContent() {
+// start cleanup routine runs periodic cleanup of expired content
+func startCleanupRoutine(service *services.ContentService, logger *logrus.Logger) {
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
+	logger.Info("cleanup routine started")
+
 	for range ticker.C {
-		log.Println("Running cleanup routine...")
-
-		rows, err := db.Query(`
-			SELECT id, filepath FROM content 
-			WHERE expires_at < ? AND type = 'file'
-		`, time.Now().UTC().Format("2006-01-02 15:04:05"))
+		ctx := context.Background()
+		count, err := service.CleanupExpired(ctx)
 		if err != nil {
-			log.Printf("Cleanup query error: %v", err)
-			continue
-		}
-
-		var deleted int
-		for rows.Next() {
-			var id, filepath string
-			if err := rows.Scan(&id, &filepath); err != nil {
-				log.Printf("Scan error: %v", err)
-				continue
-			}
-
-			// delete file
-			if err := os.Remove(filepath); err != nil && !os.IsNotExist(err) {
-				log.Printf("Failed to delete file %s: %v", filepath, err)
-			}
-
-			deleted++
-		}
-		rows.Close()
-
-		// delete expired records
-		result, err := db.Exec(`DELETE FROM content WHERE expires_at < ?`, time.Now().UTC().Format("2006-01-02 15:04:05"))
-		if err != nil {
-			log.Printf("Failed to delete expired content: %v", err)
+			logger.WithError(err).Error("cleanup routine failed")
 		} else {
-			count, _ := result.RowsAffected()
-			log.Printf("Cleaned up %d expired items (%d files deleted)", count, deleted)
+			logger.WithField("deleted_count", count).Info("cleanup routine completed")
 		}
 	}
 }
 
-func getFileExtension(filename string) string {
-	ext := filepath.Ext(filename)
-	if ext == "" {
-		return ".bin"
+// start server with graceful shutdown
+func startServer(r *gin.Engine, cfg *config.Config, logger *logrus.Logger) {
+	addr := fmt.Sprintf(":%s", cfg.Server.Port)
+
+	// create server with timeout configurations
+	srv := &http.Server{
+		Addr:           addr,
+		Handler:        r,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+		MaxHeaderBytes: 1 << 20,
 	}
-	return ext
+
+	// start server in goroutine
+	go func() {
+		logger.WithField("port", cfg.Server.Port).Info("server starting")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.WithError(err).Fatal("failed to start server")
+		}
+	}()
+
+	// wait for interrupt signal for graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("shutting down server...")
+
+	// graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.WithError(err).Fatal("server forced to shutdown")
+	}
+
+	logger.Info("server exited")
 }
