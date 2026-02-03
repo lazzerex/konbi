@@ -19,6 +19,7 @@ type ServerConfig struct {
 	Port           string
 	AllowedOrigins string
 	Environment    string
+	BaseURL        string // base url for shortened urls
 }
 
 // database configuration
@@ -50,6 +51,7 @@ func Load() *Config {
 			Port:           getEnv("PORT", "8080"),
 			AllowedOrigins: getEnv("ALLOWED_ORIGINS", "http://localhost:3000"),
 			Environment:    getEnv("ENVIRONMENT", "development"),
+			BaseURL:        getEnv("BASE_URL", "http://localhost:8080"),
 		},
 		Database: DatabaseConfig{
 			URL:            getEnv("DATABASE_URL", ""),
