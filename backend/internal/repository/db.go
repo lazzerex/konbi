@@ -96,6 +96,33 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_content_deleted_at ON content(deleted_at);
 		CREATE INDEX IF NOT EXISTS idx_content_type ON content(type);
 		CREATE INDEX IF NOT EXISTS idx_content_created_at ON content(created_at DESC);
+
+		CREATE TABLE IF NOT EXISTS shortened_urls (
+			id BIGSERIAL PRIMARY KEY,
+			short_code TEXT UNIQUE NOT NULL,
+			original_url TEXT NOT NULL,
+			custom_alias TEXT,
+			created_at TIMESTAMP DEFAULT NOW(),
+			expires_at TIMESTAMP,
+			click_count INTEGER DEFAULT 0,
+			deleted_at TIMESTAMP
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_shortened_urls_short_code ON shortened_urls(short_code);
+		CREATE INDEX IF NOT EXISTS idx_shortened_urls_expires_at ON shortened_urls(expires_at);
+		CREATE INDEX IF NOT EXISTS idx_shortened_urls_deleted_at ON shortened_urls(deleted_at);
+
+		CREATE TABLE IF NOT EXISTS url_clicks (
+			id BIGSERIAL PRIMARY KEY,
+			url_id BIGINT NOT NULL REFERENCES shortened_urls(id) ON DELETE CASCADE,
+			clicked_at TIMESTAMP DEFAULT NOW(),
+			ip_address TEXT,
+			user_agent TEXT,
+			referrer TEXT
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_url_clicks_url_id ON url_clicks(url_id);
+		CREATE INDEX IF NOT EXISTS idx_url_clicks_clicked_at ON url_clicks(clicked_at DESC);
 		`
 	} else {
 		schema = `
@@ -122,6 +149,33 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 		CREATE INDEX IF NOT EXISTS idx_content_deleted_at ON content(deleted_at);
 		CREATE INDEX IF NOT EXISTS idx_content_type ON content(type);
 		CREATE INDEX IF NOT EXISTS idx_content_created_at ON content(created_at DESC);
+
+		CREATE TABLE IF NOT EXISTS shortened_urls (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			short_code TEXT UNIQUE NOT NULL,
+			original_url TEXT NOT NULL,
+			custom_alias TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME,
+			click_count INTEGER DEFAULT 0,
+			deleted_at DATETIME
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_shortened_urls_short_code ON shortened_urls(short_code);
+		CREATE INDEX IF NOT EXISTS idx_shortened_urls_expires_at ON shortened_urls(expires_at);
+		CREATE INDEX IF NOT EXISTS idx_shortened_urls_deleted_at ON shortened_urls(deleted_at);
+
+		CREATE TABLE IF NOT EXISTS url_clicks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			url_id INTEGER NOT NULL REFERENCES shortened_urls(id) ON DELETE CASCADE,
+			clicked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			ip_address TEXT,
+			user_agent TEXT,
+			referrer TEXT
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_url_clicks_url_id ON url_clicks(url_id);
+		CREATE INDEX IF NOT EXISTS idx_url_clicks_clicked_at ON url_clicks(clicked_at DESC);
 		`
 	}
 
