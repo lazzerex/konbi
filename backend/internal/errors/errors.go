@@ -81,6 +81,15 @@ func NewRateLimitError() *AppError {
 	}
 }
 
+func NewConflictError(message string) *AppError {
+	return &AppError{
+		Code:       "CONFLICT",
+		Message:    message,
+		StatusCode: http.StatusConflict,
+		Err:        nil,
+	}
+}
+
 // validation errors
 func NewFileTooLargeError(maxSize int64) *AppError {
 	return &AppError{
