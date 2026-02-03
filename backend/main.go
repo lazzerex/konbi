@@ -61,12 +61,16 @@ func main() {
 
 	// initialize repositories
 	contentRepo := repository.NewContentRepository(db, logger)
+	isPostgres := cfg.Database.URL != ""
+	urlRepo := repository.NewURLRepository(db, logger, isPostgres)
 
 	// initialize services
 	contentService := services.NewContentService(contentRepo, cfg, logger)
+	urlService := services.NewURLService(urlRepo, cfg, logger)
 
 	// initialize handlers
 	contentHandler := handlers.NewContentHandler(contentService, logger)
+	urlHandler := handlers.NewURLHandler(urlService, cfg, logger)
 
 	// initialize middlewares
 	loggerMiddleware := middleware.NewLoggerMiddleware(logger)
@@ -74,7 +78,7 @@ func main() {
 	adminAuth := middleware.NewAdminAuth(cfg, logger)
 
 	// setup router
-	r := setupRouter(cfg, contentHandler, loggerMiddleware, rateLimiter, adminAuth)
+	r := setupRouter(cfg, contentHandler, urlHandler, loggerMiddleware, rateLimiter, adminAuth)
 
 	// start cleanup routine
 	go startCleanupRoutine(contentService, logger)
@@ -107,6 +111,7 @@ func setupLogger() *logrus.Logger {
 func setupRouter(
 	cfg *config.Config,
 	contentHandler *handlers.ContentHandler,
+	urlHandler *handlers.URLHandler,
 	loggerMiddleware *middleware.LoggerMiddleware,
 	rateLimiter *middleware.RateLimiter,
 	adminAuth *middleware.AdminAuth,
@@ -138,6 +143,9 @@ func setupRouter(
 	r.GET("/", handlers.Root)
 	r.GET("/health", handlers.HealthCheck)
 
+	// url shortener redirect (public)
+	r.GET("/s/:code", urlHandler.Redirect)
+
 	// api routes
 	api := r.Group("/api")
 	{
@@ -146,6 +154,11 @@ func setupRouter(
 		api.GET("/content/:id", contentHandler.GetContent)
 		api.GET("/content/:id/download", contentHandler.Download)
 		api.GET("/stats/:id", contentHandler.GetStats)
+
+		// url shortener api
+		api.POST("/shorten", urlHandler.Shorten)
+		api.GET("/shorten/:code/stats", urlHandler.GetStats)
+		api.DELETE("/shorten/:code", urlHandler.DeleteURL)
 
 		// admin routes
 		admin := api.Group("/admin")
