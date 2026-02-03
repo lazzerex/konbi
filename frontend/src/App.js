@@ -26,7 +26,7 @@ function App() {
       icon: HiLightningBolt,
       title: 'Instant Sharing',
       description: 'Share files and notes in seconds. No sign-up required.',
-      color: '#0ea5e9'
+      color: '#667eea'
     },
     {
       icon: HiShieldCheck,
@@ -44,7 +44,7 @@ function App() {
       icon: HiGlobe,
       title: 'Universal Access',
       description: 'Share with anyone, anywhere using a simple ID.',
-      color: '#6366f1'
+      color: '#ec4899'
     }
   ];
 

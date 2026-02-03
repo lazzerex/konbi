@@ -91,16 +91,20 @@
   gap: 16px;
 }
 
-.mode-toggle {
+/* Tool Tabs - Main tool selection */
+.tool-tabs {
   display: flex;
-  gap: 6px;
-  background: var(--bg-secondary);
+  gap: 8px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
-  padding: 4px;
-  border: 1px solid var(--border-color);
+  padding: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
-.mode-toggle button {
+.tool-tabs button {
   padding: 10px 24px;
   border: none;
   background: transparent;
@@ -113,12 +117,49 @@
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
+}
+
+.tool-tabs button.active {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  color: white;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+}
+
+.tool-tabs button:hover:not(.active) {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+/* Mode Toggle - Share/Access within File Share tool */
+.mode-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.mode-toggle button {
+  padding: 8px 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .mode-toggle button.active {
   background: var(--accent-primary);
   color: white;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.25);
 }
 
 .mode-toggle button:hover:not(.active) {
@@ -441,6 +482,19 @@
   .header-right {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tool-tabs {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .tool-tabs button {
+    flex: 1;
+    padding: 10px 16px;
+    font-size: 13px;
   }
 
   .mode-toggle {
@@ -449,8 +503,8 @@
 
   .mode-toggle button {
     flex: 1;
-    padding: 10px 16px;
-    font-size: 13px;
+    padding: 8px 14px;
+    font-size: 12px;
   }
 
   .theme-toggle {
