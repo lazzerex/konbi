@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -126,13 +127,22 @@ func setupRouter(
 
 	// cors configuration
 	corsConfig := cors.DefaultConfig()
-	if cfg.Server.AllowedOrigins != "" {
-		corsConfig.AllowOrigins = []string{cfg.Server.AllowedOrigins}
-	} else {
-		corsConfig.AllowOrigins = []string{"http://localhost:3000"}
+	if cfg.Server.AllowedOrigins == "*" {
+		// allow all origins (use only in development)
+		corsConfig.AllowAllOrigins = true
+	} else if cfg.Server.AllowedOrigins != "" {
+		// parse comma-separated origins
+		origins := []string{}
+		for _, origin := range splitAndTrim(cfg.Server.AllowedOrigins, ",") {
+			if origin != "" {
+				origins = append(origins, origin)
+			}
+		}
+		corsConfig.AllowOrigins = origins
 	}
-	corsConfig.AllowMethods = []string{"GET", "POST", "OPTIONS"}
-	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Content-Length", "Accept", "X-Admin-Secret"}
+	corsConfig.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Type", "Content-Length", "Accept", "X-Admin-Secret", "Authorization"}
+	corsConfig.AllowCredentials = true
 	r.Use(cors.New(corsConfig))
 
 	// global middleware
@@ -226,4 +236,17 @@ func startServer(r *gin.Engine, cfg *config.Config, logger *logrus.Logger) {
 	}
 
 	logger.Info("server exited")
+}
+
+// splitAndTrim splits a string by delimiter and trims whitespace from each part
+func splitAndTrim(s, delimiter string) []string {
+	parts := strings.Split(s, delimiter)
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
