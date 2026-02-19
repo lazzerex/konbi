@@ -12,8 +12,8 @@
   <img src="https://img.shields.io/badge/Go-1.21-00ADD8?style=flat&logo=go&logoColor=white"/>
   <img src="https://img.shields.io/badge/React-18.2-61DAFB?style=flat&logo=react&logoColor=black"/>
   <img src="https://img.shields.io/badge/Database-Neon-00E699?style=flat&logo=postgresql&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Backend-Railway-7B3FE4?style=flat&logo=railway&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Deployed%20on-Vercel-000000?style=flat&logo=vercel&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Backend-Render-46E3B7?style=flat&logo=render&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Frontend-Vercel-000000?style=flat&logo=vercel&logoColor=white"/>
   <img src="https://img.shields.io/badge/License-MIT-F7DF1E?style=flat&logoColor=black"/>
 </p>
 
@@ -25,7 +25,7 @@
 
 <p align="center">
   <strong>Live Application</strong><br/>
-  Frontend deployed on <strong>Vercel</strong> | Backend deployed on <strong>Railway</strong> | Database managed with <strong>Neon</strong>
+  Frontend deployed on <strong>Vercel</strong> | Backend deployed on <strong>Render</strong> | Database managed with <strong>Neon</strong>
 </p>
 <img width="1184" height="693" alt="konbi1" src="https://github.com/user-attachments/assets/3c52e1a3-f29a-4e0a-b790-99dca741f4ef" />
 <img width="1177" height="689" alt="konbi3" src="https://github.com/user-attachments/assets/79eaef47-a80d-4ff9-98a9-3da43f41b3e1" />
@@ -67,7 +67,7 @@
 - Gin web framework
 - PostgreSQL (Neon) or SQLite database
 - Local filesystem storage
-- Deployed on Railway
+- Deployed on Render
 
 ## Project Structure
 
@@ -97,7 +97,7 @@ konbi/
 │   ├── uploads/                         # Uploaded files storage
 │   ├── go.mod                           # Go dependencies
 │   ├── Dockerfile                       # Backend Docker config
-│   └── railway.toml                     # Railway deployment config
+│   └── render.yaml                      # Render deployment config
 ├── frontend/
 │   ├── public/
 │   │   └── index.html
@@ -320,7 +320,7 @@ Get statistics for content.
 
 The application is currently deployed and running in production:
 - **Frontend:** Vercel (automatic deployments from main branch)
-- **Backend:** Railway (automatic deployments from main branch)
+- **Backend:** Render (automatic deployments from main branch)
 
 ### Deploying Your Own Instance
 
@@ -346,14 +346,14 @@ npm install -g vercel
 
 4. Set environment variable in Vercel dashboard:
 ```
-REACT_APP_API_URL=https://your-railway-backend-url.up.railway.app/api
+REACT_APP_API_URL=https://your-app-name.onrender.com/api
 ```
 
 5. Deploy - Vercel will automatically deploy on every push to main branch
 
-### Backend (Railway)
+### Backend (Render)
 
-**Recommended for Production**
+**Recommended for Production - Free Tier Available**
 
 1. Push your code to GitHub
 
@@ -362,25 +362,36 @@ REACT_APP_API_URL=https://your-railway-backend-url.up.railway.app/api
    - Create a new project
    - Copy the connection string
 
-3. Go to [Railway.app](https://railway.app)
+3. Go to [Render.com](https://render.com) and sign up/login
 
-4. Click "New Project" → "Deploy from GitHub repo"
+4. Click "New +" → "Web Service"
 
-5. Select your repository
+5. Connect your GitHub repository
 
-6. Railway will automatically:
-   - Detect the Go application
-   - Use the `railway.toml` configuration
-   - Set up the build and deployment
+6. Configure the service:
+   - **Name:** konbi-backend (or your preferred name)
+   - **Region:** Choose nearest to your users
+   - **Branch:** main
+   - **Root Directory:** backend
+   - **Runtime:** Docker
+   - **Instance Type:** Free
 
-7. Configure environment variables in Railway dashboard:
+7. Render will automatically detect the Dockerfile and use `render.yaml` configuration
+
+8. Add environment variables in Render dashboard:
    - `DATABASE_URL` - Your Neon PostgreSQL connection string
-   - `ADMIN_SECRET` - Random secret for admin endpoints (optional)
-   - `ALLOWED_ORIGINS` - Your Vercel frontend URL
+   - `ADMIN_SECRET` - Random secret for admin endpoints (generate a secure random string)
+   - `ALLOWED_ORIGINS` - Your Vercel frontend URL (e.g., https://your-app.vercel.app)
+   - `PORT` - 8080 (Render provides this automatically, but you can set it)
 
-8. Your backend will be live with a Railway URL
+9. Click "Create Web Service"
 
-**Note:** Using Neon database provides better performance and data persistence compared to SQLite. The backend automatically detects and uses PostgreSQL when `DATABASE_URL` is set.
+10. Your backend will be live at `https://your-app-name.onrender.com`
+
+**Note:** 
+- Render's free tier spins down after 15 minutes of inactivity, so first request may take 30-60 seconds
+- Using Neon database provides better performance and data persistence compared to SQLite
+- The backend automatically detects and uses PostgreSQL when `DATABASE_URL` is set
 
 ### Backend (Fly.io)
 
@@ -432,11 +443,11 @@ User Browser
      ↓
 Vercel (Frontend - React SPA)
      ↓
-Railway (Backend - Go API)
+Render (Backend - Go API)
      ↓
 Neon (PostgreSQL Database)
      ↓
-File Storage (Railway Volume/Local)
+File Storage (Render Disk/Local)
 ```
 
 **Key Features in Production:**
@@ -448,7 +459,7 @@ File Storage (Railway Volume/Local)
 - Serverless PostgreSQL database via Neon
 - Auto-scaling database with Neon
 - Protected admin endpoints with secret authentication
-- Automatic deployments from GitHub
+- Automatic deployments from GitHub via Render
 - Security: npm packages updated and vulnerabilities patched
 
 ## Configuration
@@ -575,7 +586,7 @@ psql $DATABASE_URL -c "DELETE FROM content WHERE expires_at < now()"
 ```bash
 # First, view all content
 curl -H "X-Admin-Secret: your-secret" \
-  https://your-backend.up.railway.app/api/admin/list
+  https://your-backend.onrender.com/api/admin/list
 ```
 
 ### Backup Database
@@ -669,13 +680,13 @@ The project uses npm overrides to patch vulnerable dependencies in react-scripts
 
 ## Migration Guide
 
-### From Railway to Fly.io/Render
+### From Railway/Fly.io to Render
 
 Since the database is on Neon (separate from hosting), migration is simple:
 
-1. Deploy backend to new platform (Fly.io/Render)
+1. Deploy backend to Render (see Backend deployment section)
 2. Set the **same** `DATABASE_URL` environment variable
-3. Update frontend's `REACT_APP_API_URL` to new backend URL
+3. Update frontend's `REACT_APP_API_URL` to new backend URL in Vercel
 4. Done! No data migration needed.
 
 ### From SQLite to Neon
@@ -703,7 +714,7 @@ Note: Since content expires after 7 days, starting fresh is often acceptable.
 - **Size Limits**: 50MB max file size
 - **CORS**: Configured for specific origins in production
 - **Dependencies**: Regularly updated, security vulnerabilities patched
-- **HTTPS**: Enforced in production via Vercel and Railway
+- **HTTPS**: Enforced in production via Vercel and Render
 
 ## Contributing
 
