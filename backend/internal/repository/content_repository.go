@@ -28,9 +28,10 @@ func NewContentRepository(db *sql.DB, logger *logrus.Logger) *ContentRepository 
 }
 
 // helper to get current timestamp function based on database type
+// for postgresql, always use UTC to match Go's time.Now().UTC()
 func (r *ContentRepository) nowFunc() string {
 	if r.isPostgres {
-		return "NOW()"
+		return "(NOW() AT TIME ZONE 'UTC')"
 	}
 	return "datetime('now')"
 }
