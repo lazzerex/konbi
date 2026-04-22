@@ -295,11 +295,11 @@ func (r *ContentRepository) FindBundleFiles(ctx context.Context, bundleID string
 	query := r.convertQuery(fmt.Sprintf(`
 		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
 		FROM content
-		WHERE bundle_id = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
+		WHERE bundle_id = ? AND type = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
 		ORDER BY created_at ASC
 	`, r.nowFunc(), r.nowFunc()))
 
-	rows, err := r.db.QueryContext(ctx, query, bundleID)
+	rows, err := r.db.QueryContext(ctx, query, bundleID, models.ContentTypeFile)
 	if err != nil {
 		r.logger.WithError(err).WithField("bundle_id", bundleID).Error("failed to find bundle files")
 		return nil, errors.NewInternalError("database error", err)
