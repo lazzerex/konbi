@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  HiSearch, 
-  HiDocument, 
-  HiDownload, 
+import {
+  HiSearch,
+  HiDocument,
+  HiDownload,
   HiClipboard,
   HiCheckCircle,
   HiXCircle,
   HiInbox,
-  HiFolder
+  HiFolder,
+  HiX
 } from 'react-icons/hi';
 import axios from 'axios';
 import API_URL from '../config';
@@ -24,7 +25,7 @@ function AccessMode() {
   const handleFetch = async (input = id) => {
     const lookupValue = input.trim();
     if (!lookupValue) {
-      setError('Please enter an ID or code');
+      setError('Please enter an ID');
       return;
     }
 
@@ -33,49 +34,37 @@ function AccessMode() {
     setContent(null);
 
     try {
-      let response;
-      try {
-        response = await axios.get(`${API_URL}/content/${lookupValue}`);
-      } catch (err) {
-        const isNotFound = err.response?.status === 404 || err.response?.data?.code === 'NOT_FOUND';
-        if (!isNotFound) {
-          throw err;
-        }
-        response = await axios.get(`${API_URL}/c/${lookupValue}`);
-      }
-
+      const response = await axios.get(`${API_URL}/content/${lookupValue}`);
       setContent(response.data);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to retrieve content');
+      const status = err.response?.status;
+      if (status === 429) {
+        setError('Too many requests. Please wait a moment and try again.');
+      } else {
+        setError(err.response?.data?.error || 'Failed to retrieve content');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // check if id/code is in URL
     const params = new URLSearchParams(window.location.search);
     const urlId = params.get('id');
-    const urlCode = params.get('code');
-    const lookupValue = urlId || urlCode;
-
-    if (lookupValue) {
-      setId(lookupValue);
-      handleFetch(lookupValue);
+    if (urlId) {
+      setId(urlId);
+      handleFetch(urlId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDownload = () => {
-    // create download link
-    const downloadId = content?.id || id;
-    const downloadUrl = `${API_URL}/content/${downloadId}/download`;
+    const downloadUrl = `${API_URL}/content/${content.id}/download`;
     window.location.href = downloadUrl;
   };
 
   const handleBundleDownload = () => {
-    const bundleId = content?.id || id;
-    const zipUrl = `${API_URL}/content/${bundleId}/zip`;
+    const zipUrl = `${API_URL}/content/${content.id}/zip`;
     window.location.href = zipUrl;
   };
 
@@ -136,19 +125,41 @@ function AccessMode() {
         </div>
       </motion.div>
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {error && (
-          <motion.div 
-            className="error-message"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.3 }}
+          <motion.div
+            className="error-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setError(null)}
           >
-            <HiXCircle size={20} />
-            {error}
+            <motion.div
+              className="error-modal"
+              initial={{ opacity: 0, scale: 0.9, y: -20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: -20 }}
+              transition={{ duration: 0.25 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="error-modal-header">
+                <HiXCircle size={22} className="error-modal-icon" />
+                <span>Error</span>
+                <button className="error-modal-close" onClick={() => setError(null)}>
+                  <HiX size={18} />
+                </button>
+              </div>
+              <p className="error-modal-message">{error}</p>
+              <button className="error-modal-btn" onClick={() => setError(null)}>
+                Dismiss
+              </button>
+            </motion.div>
           </motion.div>
         )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
 
         {content && content.type === 'note' && (
           <motion.div 

@@ -445,22 +445,6 @@ function ShareMode() {
                   <span>{r.filename}</span>
                 </div>
 
-                {r.code && (
-                  <div className="result-card-row">
-                    <span className="result-card-label">Short Code</span>
-                    <div className="result-card-value">
-                      <code className="short-code">{r.code}</code>
-                      <motion.button
-                        onClick={() => copyToClipboard(r.code, 'Code')}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <HiClipboard size={15} />
-                      </motion.button>
-                    </div>
-                  </div>
-                )}
-
                 <div className="result-card-row">
                   <span className="result-card-label">Share URL</span>
                   <div className="result-card-value">
@@ -532,22 +516,6 @@ function ShareMode() {
               </motion.button>
             </div>
             <div className="result-content">
-              {bundleResult.code && (
-                <div className="code-display">
-                  <label>Short Code:</label>
-                  <div className="code-value">
-                    <code>{bundleResult.code}</code>
-                    <motion.button
-                      onClick={() => copyToClipboard(bundleResult.code, 'Code')}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <HiClipboard size={18} />
-                      Copy
-                    </motion.button>
-                  </div>
-                </div>
-              )}
               <div className="url-display">
                 <label>Share URL:</label>
                 <div className="url-value">
@@ -620,22 +588,6 @@ function ShareMode() {
               </motion.button>
             </div>
             <div className="result-content">
-              {noteResult.code && (
-                <div className="code-display">
-                  <label>Short Code:</label>
-                  <div className="code-value">
-                    <code>{noteResult.code}</code>
-                    <motion.button
-                      onClick={() => copyToClipboard(noteResult.code, 'Code')}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <HiClipboard size={18} />
-                      Copy
-                    </motion.button>
-                  </div>
-                </div>
-              )}
               <div className="id-display">
                 <label>Share ID:</label>
                 <div className="id-value">
