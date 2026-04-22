@@ -1,10 +1,27 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HiCloudUpload, HiDocumentText, HiCheckCircle, HiXCircle, HiClipboard, HiFolder, HiX, HiQrcode } from 'react-icons/hi';
+import { HiCloudUpload, HiDocumentText, HiCheckCircle, HiXCircle, HiClipboard, HiFolder, HiX } from 'react-icons/hi';
 import { QRCodeSVG } from 'qrcode.react';
 import axios from 'axios';
 import API_URL from '../config';
 import './ShareMode.css';
+
+const RECENT_KEY = 'konbi.recent_uploads';
+const MAX_RECENT = 10;
+
+function loadRecentUploads() {
+  try {
+    return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveRecentUpload(entry, current) {
+  const next = [entry, ...current.filter(r => r.id !== entry.id)].slice(0, MAX_RECENT);
+  localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  return next;
+}
 
 function ShareMode() {
   const [activeTab, setActiveTab] = useState('file');
@@ -17,7 +34,6 @@ function ShareMode() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [results, setResults] = useState([]);
   const [bundleResult, setBundleResult] = useState(null);
-  const [qrVisible, setQrVisible] = useState(new Set());
 
   // note state
   const [noteTitle, setNoteTitle] = useState('');
@@ -28,6 +44,7 @@ function ShareMode() {
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState(null);
   const [copyToast, setCopyToast] = useState(null);
+  const [recentUploads, setRecentUploads] = useState(() => loadRecentUploads());
 
   const handleDrag = (e) => {
     e.preventDefault();
@@ -74,7 +91,6 @@ function ShareMode() {
     setError(null);
     setResults([]);
     setBundleResult(null);
-    setQrVisible(new Set());
 
     if (files.length === 1) {
       const file = files[0];
@@ -98,17 +114,24 @@ function ShareMode() {
             setUploadProgress(Math.round((e.loaded * 100) / e.total));
           },
         });
-        setResults([{
+        const result = {
           id: response.data.id,
           code: response.data.code,
           filename: response.data.filename,
           expiresAt: response.data.expiresAt,
-        }]);
+        };
+        setResults([result]);
+        setRecentUploads(prev => saveRecentUpload({
+          id: result.id,
+          type: 'file',
+          label: result.filename,
+          expiresAt: result.expiresAt,
+          uploadedAt: new Date().toISOString(),
+        }, prev));
       } catch (err) {
         setError(err.response?.data?.error || 'upload failed');
       }
     } else {
-      // multiple files — upload as a bundle
       for (const file of files) {
         if (file.size > 50 * 1024 * 1024) {
           setError(`${file.name}: exceeds 50MB limit`);
@@ -128,12 +151,20 @@ function ShareMode() {
             setUploadProgress(Math.round((e.loaded * 100) / e.total));
           },
         });
-        setBundleResult({
+        const result = {
           id: response.data.id,
           code: response.data.code,
           fileCount: response.data.fileCount,
           expiresAt: response.data.expiresAt,
-        });
+        };
+        setBundleResult(result);
+        setRecentUploads(prev => saveRecentUpload({
+          id: result.id,
+          type: 'bundle',
+          label: `Bundle (${result.fileCount} files)`,
+          expiresAt: result.expiresAt,
+          uploadedAt: new Date().toISOString(),
+        }, prev));
       } catch (err) {
         setError(err.response?.data?.error || 'bundle upload failed');
       }
@@ -183,15 +214,6 @@ function ShareMode() {
   };
 
   const getShareUrl = (id) => `${window.location.origin}?id=${id}`;
-
-  const toggleQR = (id) => {
-    setQrVisible(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   const formatSize = (bytes) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -409,7 +431,7 @@ function ShareMode() {
         )}
       </AnimatePresence>
 
-      {/* multi-file upload results */}
+      {/* file upload results */}
       <AnimatePresence>
         {results.length > 0 && (
           <motion.div
@@ -424,7 +446,7 @@ function ShareMode() {
               {results.length} file{results.length > 1 ? 's' : ''} uploaded
               <motion.button
                 className="close-result"
-                onClick={() => { setResults([]); setBundleResult(null); setQrVisible(new Set()); }}
+                onClick={() => { setResults([]); setBundleResult(null); }}
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.9 }}
               >
@@ -432,7 +454,7 @@ function ShareMode() {
               </motion.button>
             </div>
 
-            {results.length > 0 && results.map((r, i) => (
+            {results.map((r, i) => (
               <motion.div
                 key={r.id}
                 className="result-card"
@@ -446,6 +468,20 @@ function ShareMode() {
                 </div>
 
                 <div className="result-card-row">
+                  <span className="result-card-label">ID</span>
+                  <div className="result-card-value">
+                    <input type="text" value={r.id} readOnly />
+                    <motion.button
+                      onClick={() => copyToClipboard(r.id, 'ID')}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <HiClipboard size={15} />
+                    </motion.button>
+                  </div>
+                </div>
+
+                <div className="result-card-row">
                   <span className="result-card-label">Share URL</span>
                   <div className="result-card-value">
                     <input type="text" value={getShareUrl(r.id)} readOnly />
@@ -456,31 +492,15 @@ function ShareMode() {
                     >
                       <HiClipboard size={15} />
                     </motion.button>
-                    <motion.button
-                      className="qr-toggle-btn"
-                      onClick={() => toggleQR(r.id)}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      title="Toggle QR code"
-                    >
-                      <HiQrcode size={15} />
-                    </motion.button>
                   </div>
                 </div>
 
-                <AnimatePresence>
-                  {qrVisible.has(r.id) && (
-                    <motion.div
-                      className="result-card-qr"
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <QRCodeSVG value={getShareUrl(r.id)} size={140} level="M" includeMargin={true} />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                <div className="result-card-row">
+                  <span className="result-card-label">Scan to share</span>
+                  <div className="result-card-qr">
+                    <QRCodeSVG value={getShareUrl(r.id)} size={140} level="M" includeMargin={true} />
+                  </div>
+                </div>
 
                 <span className="result-card-expires">
                   Expires {new Date(r.expiresAt).toLocaleString()}
@@ -516,6 +536,20 @@ function ShareMode() {
               </motion.button>
             </div>
             <div className="result-content">
+              <div className="id-display">
+                <label>Share ID:</label>
+                <div className="id-value">
+                  <code>{bundleResult.id}</code>
+                  <motion.button
+                    onClick={() => copyToClipboard(bundleResult.id, 'ID')}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <HiClipboard size={18} />
+                    Copy ID
+                  </motion.button>
+                </div>
+              </div>
               <div className="url-display">
                 <label>Share URL:</label>
                 <div className="url-value">
@@ -634,6 +668,64 @@ function ShareMode() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* recent uploads */}
+      {recentUploads.length > 0 && (
+        <div className="recent-uploads">
+          <div className="recent-uploads-header">
+            <span>Recent uploads</span>
+            <motion.button
+              className="recent-clear-btn"
+              onClick={() => { localStorage.removeItem(RECENT_KEY); setRecentUploads([]); }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              Clear
+            </motion.button>
+          </div>
+          <div className="recent-list">
+            {recentUploads.map(r => {
+              const isExpired = new Date(r.expiresAt) < new Date();
+              const shareUrl = getShareUrl(r.id);
+              return (
+                <div key={r.id} className={`recent-item${isExpired ? ' recent-expired' : ''}`}>
+                  <div className="recent-item-top">
+                    <div className="recent-item-label">
+                      {r.type === 'bundle' ? <HiFolder size={14} /> : <HiDocumentText size={14} />}
+                      <span>{r.label}</span>
+                      {isExpired && <span className="recent-expired-badge">Expired</span>}
+                    </div>
+                    <span className="recent-item-date">
+                      {new Date(r.uploadedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="recent-item-id">
+                    <code>{r.id}</code>
+                    <motion.button
+                      className="recent-action-btn"
+                      onClick={() => copyToClipboard(r.id, 'ID')}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <HiClipboard size={13} />
+                      ID
+                    </motion.button>
+                    <motion.button
+                      className="recent-action-btn"
+                      onClick={() => copyToClipboard(shareUrl, 'Link')}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <HiClipboard size={13} />
+                      Link
+                    </motion.button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {copyToast && (
