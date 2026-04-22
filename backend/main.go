@@ -158,7 +158,6 @@ func setupRouter(
 		api.GET("/content/:id/download", contentHandler.Download)
 		api.GET("/content/:id/zip", contentHandler.BundleZip)
 		api.POST("/content/:id/unlock", contentHandler.Unlock)
-		api.GET("/c/:code", contentHandler.GetContentByCode)
 		api.GET("/stats/:id", contentHandler.GetStats)
 
 		// admin routes
@@ -195,11 +194,14 @@ func startServer(r *gin.Engine, cfg *config.Config, logger *logrus.Logger) {
 	addr := fmt.Sprintf(":%s", cfg.Server.Port)
 
 	// create server with timeout configurations
+	// ReadTimeout covers request body reading (large file uploads need headroom)
+	// WriteTimeout covers response writing (zip streaming can take time for large bundles)
 	srv := &http.Server{
 		Addr:           addr,
 		Handler:        r,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
+		ReadTimeout:    5 * time.Minute,
+		WriteTimeout:   10 * time.Minute,
+		IdleTimeout:    2 * time.Minute,
 		MaxHeaderBytes: 1 << 20,
 	}
 
