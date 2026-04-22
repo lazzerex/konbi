@@ -153,27 +153,9 @@ function AccessMode() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 40 }}
           >
-            <div className="spinner" style={{ width: 36, height: 36, marginBottom: 16 }}>
-              <svg viewBox="0 0 50 50" style={{ width: '100%', height: '100%' }}>
-                <circle
-                  cx="25"
-                  cy="25"
-                  r="20"
-                  fill="none"
-                  stroke="#0ea5e9"
-                  strokeWidth="5"
-                  strokeLinecap="round"
-                  strokeDasharray="90 150"
-                  strokeDashoffset="0"
-                  style={{
-                    animation: 'spinner-rotate 1s linear infinite',
-                  }}
-                />
-              </svg>
-            </div>
-            <div style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Accessing content...</div>
+            <div className="spinner" aria-hidden="true" />
+            <div className="loading-text">Accessing content...</div>
           </motion.div>
         )}
 
