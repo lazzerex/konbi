@@ -104,23 +104,8 @@ function AccessMode() {
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
           >
-            {loading ? (
-              <>
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  style={{ display: 'inline-block' }}
-                >
-                  <HiSearch size={18} />
-                </motion.div>
-                Loading...
-              </>
-            ) : (
-              <>
-                <HiSearch size={18} />
-                Access
-              </>
-            )}
+            <HiSearch size={18} />
+            Access
           </motion.button>
         </div>
       </motion.div>
@@ -160,6 +145,37 @@ function AccessMode() {
       </AnimatePresence>
 
       <AnimatePresence mode="wait">
+
+        {loading && (
+          <motion.div
+            className="loading-section"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: 40 }}
+          >
+            <div className="spinner" style={{ width: 36, height: 36, marginBottom: 16 }}>
+              <svg viewBox="0 0 50 50" style={{ width: '100%', height: '100%' }}>
+                <circle
+                  cx="25"
+                  cy="25"
+                  r="20"
+                  fill="none"
+                  stroke="#0ea5e9"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeDasharray="90 150"
+                  strokeDashoffset="0"
+                  style={{
+                    animation: 'spinner-rotate 1s linear infinite',
+                  }}
+                />
+              </svg>
+            </div>
+            <div style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Accessing content...</div>
+          </motion.div>
+        )}
 
         {content && content.type === 'note' && (
           <motion.div 

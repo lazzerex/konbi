@@ -111,10 +111,10 @@ function App() {
               {theme === 'light' ? (
                 <motion.div
                   key="moon"
-                  initial={{ rotate: -180, opacity: 0 }}
-                  animate={{ rotate: 0, opacity: 1 }}
-                  exit={{ rotate: 180, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <HiMoon size={18} />
@@ -123,10 +123,10 @@ function App() {
               ) : (
                 <motion.div
                   key="sun"
-                  initial={{ rotate: 180, opacity: 0 }}
-                  animate={{ rotate: 0, opacity: 1 }}
-                  exit={{ rotate: -180, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.25 }}
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <HiSun size={18} />
