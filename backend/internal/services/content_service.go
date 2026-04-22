@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // content service handles business logic for content operations
@@ -60,8 +61,12 @@ func (s *ContentService) UploadFile(ctx context.Context, req *models.UploadReque
 		return nil, errors.NewFileTypeNotAllowedError()
 	}
 
-	// generate unique id
+	// generate unique id and short code
 	id, err := s.generateUniqueID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	code, err := s.generateUniqueCode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -84,15 +89,31 @@ func (s *ContentService) UploadFile(ctx context.Context, req *models.UploadReque
 		return nil, errors.NewInternalError("failed to save file", err)
 	}
 
+	// hash passcode if provided
+	var passcodeHash *string
+	if req.Passcode != "" {
+		if err := validatePasscode(req.Passcode); err != nil {
+			return nil, err
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Passcode), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, errors.NewInternalError("failed to hash passcode", err)
+		}
+		h := string(hash)
+		passcodeHash = &h
+	}
+
 	// prepare content model
 	expiresAt := time.Now().UTC().Add(time.Duration(s.config.Storage.ExpirationDays) * 24 * time.Hour)
 	content := &models.Content{
-		ID:        id,
-		Type:      models.ContentTypeFile,
-		Filename:  &req.Filename,
-		Filepath:  &filePath,
-		Filesize:  &req.Size,
-		ExpiresAt: expiresAt,
+		ID:           id,
+		Code:         &code,
+		Type:         models.ContentTypeFile,
+		Filename:     &req.Filename,
+		Filepath:     &filePath,
+		Filesize:     &req.Size,
+		PasscodeHash: passcodeHash,
+		ExpiresAt:    expiresAt,
 	}
 
 	// save to database
@@ -118,10 +139,28 @@ func (s *ContentService) CreateNote(ctx context.Context, req *models.NoteRequest
 		return nil, errors.NewContentTooLargeError()
 	}
 
-	// generate unique id
+	// generate unique id and short code
 	id, err := s.generateUniqueID(ctx)
 	if err != nil {
 		return nil, err
+	}
+	code, err := s.generateUniqueCode(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// hash passcode if provided
+	var passcodeHash *string
+	if req.Passcode != "" {
+		if err := validatePasscode(req.Passcode); err != nil {
+			return nil, err
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Passcode), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, errors.NewInternalError("failed to hash passcode", err)
+		}
+		h := string(hash)
+		passcodeHash = &h
 	}
 
 	// prepare content model
@@ -132,11 +171,13 @@ func (s *ContentService) CreateNote(ctx context.Context, req *models.NoteRequest
 	}
 
 	content := &models.Content{
-		ID:        id,
-		Type:      models.ContentTypeNote,
-		Title:     title,
-		Content:   &req.Content,
-		ExpiresAt: expiresAt,
+		ID:           id,
+		Code:         &code,
+		Type:         models.ContentTypeNote,
+		Title:        title,
+		Content:      &req.Content,
+		PasscodeHash: passcodeHash,
+		ExpiresAt:    expiresAt,
 	}
 
 	// save to database
@@ -150,6 +191,105 @@ func (s *ContentService) CreateNote(ctx context.Context, req *models.NoteRequest
 	}).Info("note created successfully")
 
 	return content, nil
+}
+
+// create bundle uploads multiple files under a single shared ID/code
+func (s *ContentService) CreateBundle(ctx context.Context, files []*models.UploadRequest) (*models.Content, error) {
+	if len(files) == 0 {
+		return nil, errors.NewBadRequestError("no files provided", nil)
+	}
+
+	// validate all files up front before writing anything
+	for _, req := range files {
+		if req.Size > s.config.Storage.MaxFileSize {
+			return nil, errors.NewFileTooLargeError(s.config.Storage.MaxFileSize)
+		}
+		ext := strings.ToLower(filepath.Ext(req.Filename))
+		if ext != "" && !allowedExtensions[ext] {
+			return nil, errors.NewFileTypeNotAllowedError()
+		}
+	}
+
+	bundleID, err := s.generateUniqueID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	code, err := s.generateUniqueCode(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	expiresAt := time.Now().UTC().Add(time.Duration(s.config.Storage.ExpirationDays) * 24 * time.Hour)
+	bundle := &models.Content{
+		ID:        bundleID,
+		Code:      &code,
+		Type:      models.ContentTypeBundle,
+		ExpiresAt: expiresAt,
+	}
+	if err := s.repo.Create(ctx, bundle); err != nil {
+		return nil, err
+	}
+
+	var uploadedPaths []string
+	for _, req := range files {
+		id, err := s.generateUniqueID(ctx)
+		if err != nil {
+			s.rollbackBundle(bundleID, uploadedPaths)
+			return nil, err
+		}
+
+		ext := strings.ToLower(filepath.Ext(req.Filename))
+		diskName := id + ext
+		filePath := filepath.Join(s.config.Storage.UploadDir, diskName)
+
+		f, err := os.Create(filePath)
+		if err != nil {
+			s.rollbackBundle(bundleID, uploadedPaths)
+			return nil, errors.NewInternalError("failed to save file", err)
+		}
+		if _, err := f.Write(req.File); err != nil {
+			f.Close()
+			os.Remove(filePath)
+			s.rollbackBundle(bundleID, uploadedPaths)
+			return nil, errors.NewInternalError("failed to save file", err)
+		}
+		f.Close()
+		uploadedPaths = append(uploadedPaths, filePath)
+
+		fileContent := &models.Content{
+			ID:        id,
+			BundleID:  &bundleID,
+			Type:      models.ContentTypeFile,
+			Filename:  &req.Filename,
+			Filepath:  &filePath,
+			Filesize:  &req.Size,
+			ExpiresAt: expiresAt,
+		}
+		if err := s.repo.Create(ctx, fileContent); err != nil {
+			s.rollbackBundle(bundleID, uploadedPaths)
+			return nil, err
+		}
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"bundle_id":  bundleID,
+		"file_count": len(files),
+	}).Info("bundle created successfully")
+
+	return bundle, nil
+}
+
+// rollback bundle removes uploaded files and soft-deletes the bundle record on failure
+func (s *ContentService) rollbackBundle(bundleID string, paths []string) {
+	for _, p := range paths {
+		os.Remove(p)
+	}
+	s.repo.SoftDelete(context.Background(), bundleID)
+}
+
+// get bundle files retrieves all files belonging to a bundle
+func (s *ContentService) GetBundleFiles(ctx context.Context, bundleID string) ([]*models.Content, error) {
+	return s.repo.FindBundleFiles(ctx, bundleID)
 }
 
 // get content retrieves content by id and increments view count
@@ -167,6 +307,58 @@ func (s *ContentService) GetContent(ctx context.Context, id string) (*models.Con
 	}()
 
 	return content, nil
+}
+
+// get content by code retrieves content by short access code and increments view count
+func (s *ContentService) GetContentByCode(ctx context.Context, code string) (*models.Content, error) {
+	content, err := s.repo.FindActiveByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		if err := s.repo.IncrementViewCount(context.Background(), content.ID); err != nil {
+			s.logger.WithError(err).WithField("content_id", content.ID).Error("failed to increment view count")
+		}
+	}()
+
+	return content, nil
+}
+
+// unlock content verifies passcode and returns full content (increments view count on success)
+func (s *ContentService) UnlockContent(ctx context.Context, id, passcode string) (*models.Content, error) {
+	content, err := s.repo.FindActiveByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if content.PasscodeHash == nil {
+		return content, nil
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(*content.PasscodeHash), []byte(passcode)); err != nil {
+		s.logger.WithField("content_id", id).Warn("incorrect passcode attempt")
+		return nil, errors.NewForbiddenError("incorrect passcode")
+	}
+
+	go func() {
+		if err := s.repo.IncrementViewCount(context.Background(), id); err != nil {
+			s.logger.WithError(err).WithField("content_id", id).Error("failed to increment view count")
+		}
+	}()
+
+	return content, nil
+}
+
+// verify passcode checks a passcode against a content record without fetching from DB
+func (s *ContentService) VerifyPasscode(content *models.Content, passcode string) error {
+	if content.PasscodeHash == nil {
+		return nil
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(*content.PasscodeHash), []byte(passcode)); err != nil {
+		return errors.NewForbiddenError("incorrect passcode")
+	}
+	return nil
 }
 
 // get stats retrieves content statistics
@@ -245,6 +437,33 @@ func (s *ContentService) generateUniqueID(ctx context.Context) (string, error) {
 	return "", errors.NewInternalError("failed to generate unique id after retries", nil)
 }
 
+// generate unique code creates a unique short access code from a human-friendly alphabet
+// (no 0, 1, O, I to avoid ambiguity when read aloud or written by hand)
+func (s *ContentService) generateUniqueCode(ctx context.Context) (string, error) {
+	const maxRetries = 5
+
+	for i := 0; i < maxRetries; i++ {
+		code, err := generateRandomCode()
+		if err != nil {
+			s.logger.WithError(err).Error("failed to generate random code")
+			return "", errors.NewInternalError("failed to generate code", err)
+		}
+
+		exists, err := s.repo.CodeExists(ctx, code)
+		if err != nil {
+			return "", err
+		}
+
+		if !exists {
+			return code, nil
+		}
+
+		s.logger.WithField("code", code).Debug("code collision detected, retrying")
+	}
+
+	return "", errors.NewInternalError("failed to generate unique code after retries", nil)
+}
+
 // helper to generate random id
 func generateRandomID(length int) (string, error) {
 	bytes := make([]byte, 8)
@@ -269,4 +488,30 @@ func generateRandomID(length int) (string, error) {
 	}
 
 	return id[:length], nil
+}
+
+// validate passcode enforces length bounds (4–64 characters)
+func validatePasscode(passcode string) error {
+	if len(passcode) < 4 {
+		return errors.NewBadRequestError("passcode must be at least 4 characters", nil)
+	}
+	if len(passcode) > 64 {
+		return errors.NewBadRequestError("passcode must be at most 64 characters", nil)
+	}
+	return nil
+}
+
+// helper to generate a random short code from a human-friendly alphabet.
+// 256 % 32 == 0, so modulo produces a perfectly uniform distribution.
+func generateRandomCode() (string, error) {
+	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+	const length = 8
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	for i, v := range b {
+		b[i] = alphabet[int(v)%len(alphabet)]
+	}
+	return string(b), nil
 }
