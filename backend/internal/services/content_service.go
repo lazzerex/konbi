@@ -61,12 +61,8 @@ func (s *ContentService) UploadFile(ctx context.Context, req *models.UploadReque
 		return nil, errors.NewFileTypeNotAllowedError()
 	}
 
-	// generate unique id and short code
+	// generate unique id
 	id, err := s.generateUniqueID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	code, err := s.generateUniqueCode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +103,6 @@ func (s *ContentService) UploadFile(ctx context.Context, req *models.UploadReque
 	expiresAt := time.Now().UTC().Add(time.Duration(s.config.Storage.ExpirationDays) * 24 * time.Hour)
 	content := &models.Content{
 		ID:           id,
-		Code:         &code,
 		Type:         models.ContentTypeFile,
 		Filename:     &req.Filename,
 		Filepath:     &filePath,
@@ -139,12 +134,8 @@ func (s *ContentService) CreateNote(ctx context.Context, req *models.NoteRequest
 		return nil, errors.NewContentTooLargeError()
 	}
 
-	// generate unique id and short code
+	// generate unique id
 	id, err := s.generateUniqueID(ctx)
-	if err != nil {
-		return nil, err
-	}
-	code, err := s.generateUniqueCode(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +163,6 @@ func (s *ContentService) CreateNote(ctx context.Context, req *models.NoteRequest
 
 	content := &models.Content{
 		ID:           id,
-		Code:         &code,
 		Type:         models.ContentTypeNote,
 		Title:        title,
 		Content:      &req.Content,
@@ -214,15 +204,10 @@ func (s *ContentService) CreateBundle(ctx context.Context, files []*models.Uploa
 	if err != nil {
 		return nil, err
 	}
-	code, err := s.generateUniqueCode(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	expiresAt := time.Now().UTC().Add(time.Duration(s.config.Storage.ExpirationDays) * 24 * time.Hour)
 	bundle := &models.Content{
 		ID:        bundleID,
-		Code:      &code,
 		Type:      models.ContentTypeBundle,
 		ExpiresAt: expiresAt,
 	}
@@ -303,22 +288,6 @@ func (s *ContentService) GetContent(ctx context.Context, id string) (*models.Con
 	go func() {
 		if err := s.repo.IncrementViewCount(context.Background(), id); err != nil {
 			s.logger.WithError(err).WithField("content_id", id).Error("failed to increment view count")
-		}
-	}()
-
-	return content, nil
-}
-
-// get content by code retrieves content by short access code and increments view count
-func (s *ContentService) GetContentByCode(ctx context.Context, code string) (*models.Content, error) {
-	content, err := s.repo.FindActiveByCode(ctx, code)
-	if err != nil {
-		return nil, err
-	}
-
-	go func() {
-		if err := s.repo.IncrementViewCount(context.Background(), content.ID); err != nil {
-			s.logger.WithError(err).WithField("content_id", content.ID).Error("failed to increment view count")
 		}
 	}()
 
@@ -437,33 +406,6 @@ func (s *ContentService) generateUniqueID(ctx context.Context) (string, error) {
 	return "", errors.NewInternalError("failed to generate unique id after retries", nil)
 }
 
-// generate unique code creates a unique short access code from a human-friendly alphabet
-// (no 0, 1, O, I to avoid ambiguity when read aloud or written by hand)
-func (s *ContentService) generateUniqueCode(ctx context.Context) (string, error) {
-	const maxRetries = 5
-
-	for i := 0; i < maxRetries; i++ {
-		code, err := generateRandomCode()
-		if err != nil {
-			s.logger.WithError(err).Error("failed to generate random code")
-			return "", errors.NewInternalError("failed to generate code", err)
-		}
-
-		exists, err := s.repo.CodeExists(ctx, code)
-		if err != nil {
-			return "", err
-		}
-
-		if !exists {
-			return code, nil
-		}
-
-		s.logger.WithField("code", code).Debug("code collision detected, retrying")
-	}
-
-	return "", errors.NewInternalError("failed to generate unique code after retries", nil)
-}
-
 // helper to generate random id
 func generateRandomID(length int) (string, error) {
 	bytes := make([]byte, 8)
@@ -499,19 +441,4 @@ func validatePasscode(passcode string) error {
 		return errors.NewBadRequestError("passcode must be at most 64 characters", nil)
 	}
 	return nil
-}
-
-// helper to generate a random short code from a human-friendly alphabet.
-// 256 % 32 == 0, so modulo produces a perfectly uniform distribution.
-func generateRandomCode() (string, error) {
-	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-	const length = 8
-	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	for i, v := range b {
-		b[i] = alphabet[int(v)%len(alphabet)]
-	}
-	return string(b), nil
 }
