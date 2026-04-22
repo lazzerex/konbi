@@ -59,18 +59,21 @@ func (r *ContentRepository) convertQuery(query string) string {
 // create inserts new content record
 func (r *ContentRepository) Create(ctx context.Context, content *models.Content) error {
 	query := r.convertQuery(`
-		INSERT INTO content (id, type, title, filename, filepath, filesize, content, expires_at, view_count)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+		INSERT INTO content (id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, expires_at, view_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
 	`)
 
 	_, err := r.db.ExecContext(ctx, query,
 		content.ID,
+		content.Code,
+		content.BundleID,
 		content.Type,
 		content.Title,
 		content.Filename,
 		content.Filepath,
 		content.Filesize,
 		content.Content,
+		content.PasscodeHash,
 		content.ExpiresAt,
 	)
 
@@ -90,7 +93,7 @@ func (r *ContentRepository) Create(ctx context.Context, content *models.Content)
 // find by id retrieves content by id
 func (r *ContentRepository) FindByID(ctx context.Context, id string) (*models.Content, error) {
 	query := r.convertQuery(fmt.Sprintf(`
-		SELECT id, type, title, filename, filepath, filesize, content, created_at, expires_at, view_count, deleted_at
+		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
 		FROM content
 		WHERE id = ? AND (deleted_at IS NULL OR deleted_at > %s)
 	`, r.nowFunc()))
@@ -98,12 +101,15 @@ func (r *ContentRepository) FindByID(ctx context.Context, id string) (*models.Co
 	content := &models.Content{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&content.ID,
+		&content.Code,
+		&content.BundleID,
 		&content.Type,
 		&content.Title,
 		&content.Filename,
 		&content.Filepath,
 		&content.Filesize,
 		&content.Content,
+		&content.PasscodeHash,
 		&content.CreatedAt,
 		&content.ExpiresAt,
 		&content.ViewCount,
@@ -124,7 +130,7 @@ func (r *ContentRepository) FindByID(ctx context.Context, id string) (*models.Co
 // find active by id retrieves non-expired content
 func (r *ContentRepository) FindActiveByID(ctx context.Context, id string) (*models.Content, error) {
 	query := r.convertQuery(fmt.Sprintf(`
-		SELECT id, type, title, filename, filepath, filesize, content, created_at, expires_at, view_count, deleted_at
+		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
 		FROM content
 		WHERE id = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
 	`, r.nowFunc(), r.nowFunc()))
@@ -132,12 +138,15 @@ func (r *ContentRepository) FindActiveByID(ctx context.Context, id string) (*mod
 	content := &models.Content{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&content.ID,
+		&content.Code,
+		&content.BundleID,
 		&content.Type,
 		&content.Title,
 		&content.Filename,
 		&content.Filepath,
 		&content.Filesize,
 		&content.Content,
+		&content.PasscodeHash,
 		&content.CreatedAt,
 		&content.ExpiresAt,
 		&content.ViewCount,
@@ -155,6 +164,43 @@ func (r *ContentRepository) FindActiveByID(ctx context.Context, id string) (*mod
 	return content, nil
 }
 
+// find active by code retrieves non-expired content by its short access code
+func (r *ContentRepository) FindActiveByCode(ctx context.Context, code string) (*models.Content, error) {
+	query := r.convertQuery(fmt.Sprintf(`
+		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
+		FROM content
+		WHERE code = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
+	`, r.nowFunc(), r.nowFunc()))
+
+	content := &models.Content{}
+	err := r.db.QueryRowContext(ctx, query, code).Scan(
+		&content.ID,
+		&content.Code,
+		&content.BundleID,
+		&content.Type,
+		&content.Title,
+		&content.Filename,
+		&content.Filepath,
+		&content.Filesize,
+		&content.Content,
+		&content.PasscodeHash,
+		&content.CreatedAt,
+		&content.ExpiresAt,
+		&content.ViewCount,
+		&content.DeletedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, errors.NewNotFoundError("content not found or expired")
+	}
+	if err != nil {
+		r.logger.WithError(err).WithField("code", code).Error("failed to find active content by code")
+		return nil, errors.NewInternalError("database error", err)
+	}
+
+	return content, nil
+}
+
 // id exists checks if content id already exists
 func (r *ContentRepository) IDExists(ctx context.Context, id string) (bool, error) {
 	var exists bool
@@ -162,6 +208,18 @@ func (r *ContentRepository) IDExists(ctx context.Context, id string) (bool, erro
 	err := r.db.QueryRowContext(ctx, query, id).Scan(&exists)
 	if err != nil {
 		r.logger.WithError(err).WithField("content_id", id).Error("failed to check id existence")
+		return false, errors.NewInternalError("database error", err)
+	}
+	return exists, nil
+}
+
+// code exists checks if a short access code already exists
+func (r *ContentRepository) CodeExists(ctx context.Context, code string) (bool, error) {
+	var exists bool
+	query := r.convertQuery("SELECT EXISTS(SELECT 1 FROM content WHERE code = ?)")
+	err := r.db.QueryRowContext(ctx, query, code).Scan(&exists)
+	if err != nil {
+		r.logger.WithError(err).WithField("code", code).Error("failed to check code existence")
 		return false, errors.NewInternalError("database error", err)
 	}
 	return exists, nil
@@ -181,7 +239,7 @@ func (r *ContentRepository) IncrementViewCount(ctx context.Context, id string) e
 // list all retrieves all content (for admin)
 func (r *ContentRepository) ListAll(ctx context.Context) ([]*models.Content, error) {
 	query := fmt.Sprintf(`
-		SELECT id, type, title, filename, filesize, created_at, expires_at, view_count, deleted_at
+		SELECT id, code, type, title, filename, filesize, passcode_hash, created_at, expires_at, view_count, deleted_at
 		FROM content
 		WHERE deleted_at IS NULL OR deleted_at > %s
 		ORDER BY created_at DESC
@@ -199,10 +257,12 @@ func (r *ContentRepository) ListAll(ctx context.Context) ([]*models.Content, err
 		content := &models.Content{}
 		err := rows.Scan(
 			&content.ID,
+			&content.Code,
 			&content.Type,
 			&content.Title,
 			&content.Filename,
 			&content.Filesize,
+			&content.PasscodeHash,
 			&content.CreatedAt,
 			&content.ExpiresAt,
 			&content.ViewCount,
@@ -277,6 +337,51 @@ func (r *ContentRepository) DeleteExpired(ctx context.Context) (int64, error) {
 	count, _ := result.RowsAffected()
 	r.logger.WithField("deleted_count", count).Info("expired content deleted")
 	return count, nil
+}
+
+// find bundle files retrieves all active files belonging to a bundle
+func (r *ContentRepository) FindBundleFiles(ctx context.Context, bundleID string) ([]*models.Content, error) {
+	query := r.convertQuery(fmt.Sprintf(`
+		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
+		FROM content
+		WHERE bundle_id = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
+		ORDER BY created_at ASC
+	`, r.nowFunc(), r.nowFunc()))
+
+	rows, err := r.db.QueryContext(ctx, query, bundleID)
+	if err != nil {
+		r.logger.WithError(err).WithField("bundle_id", bundleID).Error("failed to find bundle files")
+		return nil, errors.NewInternalError("database error", err)
+	}
+	defer rows.Close()
+
+	var contents []*models.Content
+	for rows.Next() {
+		content := &models.Content{}
+		err := rows.Scan(
+			&content.ID,
+			&content.Code,
+			&content.BundleID,
+			&content.Type,
+			&content.Title,
+			&content.Filename,
+			&content.Filepath,
+			&content.Filesize,
+			&content.Content,
+			&content.PasscodeHash,
+			&content.CreatedAt,
+			&content.ExpiresAt,
+			&content.ViewCount,
+			&content.DeletedAt,
+		)
+		if err != nil {
+			r.logger.WithError(err).Error("failed to scan bundle file row")
+			continue
+		}
+		contents = append(contents, content)
+	}
+
+	return contents, nil
 }
 
 // transaction wrapper for complex operations
