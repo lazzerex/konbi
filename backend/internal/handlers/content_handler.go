@@ -9,6 +9,7 @@ import (
 	"konbi/internal/services"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -19,6 +20,10 @@ import (
 type ContentHandler struct {
 	service *services.ContentService
 	logger  *logrus.Logger
+}
+
+func hasPasscode(content *models.Content) bool {
+	return content.PasscodeHash != nil && strings.TrimSpace(*content.PasscodeHash) != ""
 }
 
 // create new content handler
@@ -171,7 +176,7 @@ func (h *ContentHandler) BundleZip(c *gin.Context) {
 		return
 	}
 
-	if bundle.PasscodeHash != nil {
+	if hasPasscode(bundle) {
 		passcode := c.GetHeader("X-Passcode")
 		if passcode == "" {
 			h.respondWithError(c, errors.NewUnauthorizedError("passcode required"))
@@ -238,7 +243,7 @@ func (h *ContentHandler) GetContent(c *gin.Context) {
 	}
 
 	// if passcode-protected, return metadata only — no content or download URL
-	if content.PasscodeHash != nil {
+	if hasPasscode(content) {
 		response := gin.H{
 			"type":         content.Type,
 			"id":           content.ID,
@@ -353,7 +358,7 @@ func (h *ContentHandler) Download(c *gin.Context) {
 	}
 
 	// verify passcode if required
-	if content.PasscodeHash != nil {
+	if hasPasscode(content) {
 		passcode := c.GetHeader("X-Passcode")
 		if passcode == "" {
 			h.respondWithError(c, errors.NewUnauthorizedError("passcode required"))
@@ -492,7 +497,7 @@ func (h *ContentHandler) ListAdmin(c *gin.Context) {
 		item := gin.H{
 			"id":           content.ID,
 			"type":         content.Type,
-			"has_passcode": content.PasscodeHash != nil,
+			"has_passcode": hasPasscode(content),
 			"created_at":   content.CreatedAt.Format(time.RFC3339),
 			"expires_at":   content.ExpiresAt.Format(time.RFC3339),
 			"view_count":   content.ViewCount,
