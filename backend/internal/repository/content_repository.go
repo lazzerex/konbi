@@ -164,43 +164,6 @@ func (r *ContentRepository) FindActiveByID(ctx context.Context, id string) (*mod
 	return content, nil
 }
 
-// find active by code retrieves non-expired content by its short access code
-func (r *ContentRepository) FindActiveByCode(ctx context.Context, code string) (*models.Content, error) {
-	query := r.convertQuery(fmt.Sprintf(`
-		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
-		FROM content
-		WHERE code = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
-	`, r.nowFunc(), r.nowFunc()))
-
-	content := &models.Content{}
-	err := r.db.QueryRowContext(ctx, query, code).Scan(
-		&content.ID,
-		&content.Code,
-		&content.BundleID,
-		&content.Type,
-		&content.Title,
-		&content.Filename,
-		&content.Filepath,
-		&content.Filesize,
-		&content.Content,
-		&content.PasscodeHash,
-		&content.CreatedAt,
-		&content.ExpiresAt,
-		&content.ViewCount,
-		&content.DeletedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, errors.NewNotFoundError("content not found or expired")
-	}
-	if err != nil {
-		r.logger.WithError(err).WithField("code", code).Error("failed to find active content by code")
-		return nil, errors.NewInternalError("database error", err)
-	}
-
-	return content, nil
-}
-
 // id exists checks if content id already exists
 func (r *ContentRepository) IDExists(ctx context.Context, id string) (bool, error) {
 	var exists bool
@@ -208,18 +171,6 @@ func (r *ContentRepository) IDExists(ctx context.Context, id string) (bool, erro
 	err := r.db.QueryRowContext(ctx, query, id).Scan(&exists)
 	if err != nil {
 		r.logger.WithError(err).WithField("content_id", id).Error("failed to check id existence")
-		return false, errors.NewInternalError("database error", err)
-	}
-	return exists, nil
-}
-
-// code exists checks if a short access code already exists
-func (r *ContentRepository) CodeExists(ctx context.Context, code string) (bool, error) {
-	var exists bool
-	query := r.convertQuery("SELECT EXISTS(SELECT 1 FROM content WHERE code = ?)")
-	err := r.db.QueryRowContext(ctx, query, code).Scan(&exists)
-	if err != nil {
-		r.logger.WithError(err).WithField("code", code).Error("failed to check code existence")
 		return false, errors.NewInternalError("database error", err)
 	}
 	return exists, nil
@@ -379,6 +330,11 @@ func (r *ContentRepository) FindBundleFiles(ctx context.Context, bundleID string
 			continue
 		}
 		contents = append(contents, content)
+	}
+
+	if err := rows.Err(); err != nil {
+		r.logger.WithError(err).WithField("bundle_id", bundleID).Error("error iterating bundle files")
+		return nil, errors.NewInternalError("database error", err)
 	}
 
 	return contents, nil
