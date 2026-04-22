@@ -65,17 +65,12 @@ func (h *ContentHandler) Upload(c *gin.Context) {
 		return
 	}
 
-	// respond
-	response := gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"id":        content.ID,
 		"filename":  *content.Filename,
 		"size":      *content.Filesize,
 		"expiresAt": content.ExpiresAt.Format(time.RFC3339),
-	}
-	if content.Code != nil {
-		response["code"] = *content.Code
-	}
-	c.JSON(http.StatusOK, response)
+	})
 }
 
 // note handles note creation requests
@@ -96,18 +91,13 @@ func (h *ContentHandler) Note(c *gin.Context) {
 		return
 	}
 
-	// respond
 	response := gin.H{
 		"id":        content.ID,
 		"expiresAt": content.ExpiresAt.Format(time.RFC3339),
 	}
-	if content.Code != nil {
-		response["code"] = *content.Code
-	}
 	if content.Title != nil {
 		response["title"] = *content.Title
 	}
-
 	c.JSON(http.StatusOK, response)
 }
 
@@ -153,15 +143,11 @@ func (h *ContentHandler) Bundle(c *gin.Context) {
 		return
 	}
 
-	response := gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"id":        bundle.ID,
 		"fileCount": len(requests),
 		"expiresAt": bundle.ExpiresAt.Format(time.RFC3339),
-	}
-	if bundle.Code != nil {
-		response["code"] = *bundle.Code
-	}
-	c.JSON(http.StatusOK, response)
+	})
 }
 
 // bundle zip streams all files in a bundle as a zip archive
@@ -200,6 +186,11 @@ func (h *ContentHandler) BundleZip(c *gin.Context) {
 	files, err := h.service.GetBundleFiles(ctx, id)
 	if err != nil {
 		h.respondWithError(c, err)
+		return
+	}
+
+	if len(files) == 0 {
+		h.respondWithError(c, errors.NewNotFoundError("no files found in bundle"))
 		return
 	}
 
@@ -249,13 +240,10 @@ func (h *ContentHandler) GetContent(c *gin.Context) {
 	// if passcode-protected, return metadata only — no content or download URL
 	if content.PasscodeHash != nil {
 		response := gin.H{
-			"type":        content.Type,
-			"id":          content.ID,
+			"type":         content.Type,
+			"id":           content.ID,
 			"has_passcode": true,
-			"expiresAt":   content.ExpiresAt.Format(time.RFC3339),
-		}
-		if content.Code != nil {
-			response["code"] = *content.Code
+			"expiresAt":    content.ExpiresAt.Format(time.RFC3339),
 		}
 		if content.Type == models.ContentTypeFile {
 			if content.Filename != nil {
@@ -278,9 +266,6 @@ func (h *ContentHandler) GetContent(c *gin.Context) {
 		response := gin.H{
 			"type": "note",
 			"id":   content.ID,
-		}
-		if content.Code != nil {
-			response["code"] = *content.Code
 		}
 		if content.Title != nil {
 			response["title"] = *content.Title
@@ -308,9 +293,6 @@ func (h *ContentHandler) GetContent(c *gin.Context) {
 			"id":          content.ID,
 			"downloadUrl": fmt.Sprintf("/api/content/%s/download", id),
 		}
-		if content.Code != nil {
-			response["code"] = *content.Code
-		}
 		if content.Filename != nil {
 			response["filename"] = *content.Filename
 		}
@@ -335,17 +317,13 @@ func (h *ContentHandler) GetContent(c *gin.Context) {
 			}
 			fileList = append(fileList, item)
 		}
-		response := gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"type":        "bundle",
 			"id":          content.ID,
 			"fileCount":   len(files),
 			"files":       fileList,
 			"downloadUrl": fmt.Sprintf("/api/content/%s/zip", id),
-		}
-		if content.Code != nil {
-			response["code"] = *content.Code
-		}
-		c.JSON(http.StatusOK, response)
+		})
 	}
 }
 
@@ -414,124 +392,6 @@ func (h *ContentHandler) Download(c *gin.Context) {
 	c.File(*content.Filepath)
 }
 
-// get content by code retrieves content by short access code
-func (h *ContentHandler) GetContentByCode(c *gin.Context) {
-	ctx := c.Request.Context()
-	code := c.Param("code")
-
-	if code == "" {
-		appErr := errors.NewBadRequestError("code required", nil)
-		h.respondWithError(c, appErr)
-		return
-	}
-
-	content, err := h.service.GetContentByCode(ctx, code)
-	if err != nil {
-		h.respondWithError(c, err)
-		return
-	}
-
-	// if passcode-protected, return metadata only
-	if content.PasscodeHash != nil {
-		response := gin.H{
-			"type":        content.Type,
-			"id":          content.ID,
-			"has_passcode": true,
-			"expiresAt":   content.ExpiresAt.Format(time.RFC3339),
-		}
-		if content.Code != nil {
-			response["code"] = *content.Code
-		}
-		if content.Type == models.ContentTypeFile {
-			if content.Filename != nil {
-				response["filename"] = *content.Filename
-			}
-			if content.Filesize != nil {
-				response["size"] = *content.Filesize
-			}
-		} else if content.Type == models.ContentTypeNote {
-			if content.Title != nil {
-				response["title"] = *content.Title
-			}
-		}
-		c.JSON(http.StatusOK, response)
-		return
-	}
-
-	if content.Type == models.ContentTypeNote {
-		response := gin.H{
-			"type": "note",
-			"id":   content.ID,
-		}
-		if content.Code != nil {
-			response["code"] = *content.Code
-		}
-		if content.Title != nil {
-			response["title"] = *content.Title
-		}
-		if content.Content != nil {
-			response["content"] = *content.Content
-		}
-		c.JSON(http.StatusOK, response)
-	} else if content.Type == models.ContentTypeFile {
-		if content.Filepath == nil {
-			appErr := errors.NewNotFoundError("file not found")
-			h.respondWithError(c, appErr)
-			return
-		}
-
-		if _, err := os.Stat(*content.Filepath); os.IsNotExist(err) {
-			appErr := errors.NewNotFoundError("file not found")
-			h.respondWithError(c, appErr)
-			return
-		}
-
-		response := gin.H{
-			"type":        "file",
-			"id":          content.ID,
-			"downloadUrl": fmt.Sprintf("/api/content/%s/download", content.ID),
-		}
-		if content.Code != nil {
-			response["code"] = *content.Code
-		}
-		if content.Filename != nil {
-			response["filename"] = *content.Filename
-		}
-		if content.Filesize != nil {
-			response["size"] = *content.Filesize
-		}
-		c.JSON(http.StatusOK, response)
-	} else if content.Type == models.ContentTypeBundle {
-		files, err := h.service.GetBundleFiles(ctx, content.ID)
-		if err != nil {
-			h.respondWithError(c, err)
-			return
-		}
-		var fileList []gin.H
-		for _, f := range files {
-			item := gin.H{"id": f.ID}
-			if f.Filename != nil {
-				item["filename"] = *f.Filename
-			}
-			if f.Filesize != nil {
-				item["size"] = *f.Filesize
-			}
-			fileList = append(fileList, item)
-		}
-		response := gin.H{
-			"type":        "bundle",
-			"id":          content.ID,
-			"fileCount":   len(files),
-			"files":       fileList,
-			"downloadUrl": fmt.Sprintf("/api/content/%s/zip", content.ID),
-		}
-		if content.Code != nil {
-			response["code"] = *content.Code
-		}
-		c.JSON(http.StatusOK, response)
-	}
-}
-
 // unlock verifies a passcode and returns full content
 func (h *ContentHandler) Unlock(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -559,9 +419,6 @@ func (h *ContentHandler) Unlock(c *gin.Context) {
 			"type": "note",
 			"id":   content.ID,
 		}
-		if content.Code != nil {
-			response["code"] = *content.Code
-		}
 		if content.Title != nil {
 			response["title"] = *content.Title
 		}
@@ -582,9 +439,6 @@ func (h *ContentHandler) Unlock(c *gin.Context) {
 			"type":        "file",
 			"id":          content.ID,
 			"downloadUrl": fmt.Sprintf("/api/content/%s/download", content.ID),
-		}
-		if content.Code != nil {
-			response["code"] = *content.Code
 		}
 		if content.Filename != nil {
 			response["filename"] = *content.Filename
