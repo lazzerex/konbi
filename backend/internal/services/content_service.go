@@ -301,7 +301,7 @@ func (s *ContentService) UnlockContent(ctx context.Context, id, passcode string)
 		return nil, err
 	}
 
-	if content.PasscodeHash == nil {
+	if content.PasscodeHash == nil || strings.TrimSpace(*content.PasscodeHash) == "" {
 		return content, nil
 	}
 
@@ -321,7 +321,7 @@ func (s *ContentService) UnlockContent(ctx context.Context, id, passcode string)
 
 // verify passcode checks a passcode against a content record without fetching from DB
 func (s *ContentService) VerifyPasscode(content *models.Content, passcode string) error {
-	if content.PasscodeHash == nil {
+	if content.PasscodeHash == nil || strings.TrimSpace(*content.PasscodeHash) == "" {
 		return nil
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(*content.PasscodeHash), []byte(passcode)); err != nil {
