@@ -7,7 +7,10 @@ import AccessMode from './components/AccessMode';
 import logo from './konbi_logo.png';
 
 function App() {
-  const [mode, setMode] = useState('share');
+  const [mode, setMode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('id') ? 'access' : 'share';
+  });
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('theme') || 'light';
   });
