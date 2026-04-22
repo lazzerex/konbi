@@ -153,8 +153,12 @@ func setupRouter(
 	{
 		api.POST("/upload", contentHandler.Upload)
 		api.POST("/note", contentHandler.Note)
+		api.POST("/bundle", contentHandler.Bundle)
 		api.GET("/content/:id", contentHandler.GetContent)
 		api.GET("/content/:id/download", contentHandler.Download)
+		api.GET("/content/:id/zip", contentHandler.BundleZip)
+		api.POST("/content/:id/unlock", contentHandler.Unlock)
+		api.GET("/c/:code", contentHandler.GetContentByCode)
 		api.GET("/stats/:id", contentHandler.GetStats)
 
 		// admin routes
