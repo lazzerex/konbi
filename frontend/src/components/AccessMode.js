@@ -7,7 +7,8 @@ import {
   HiClipboard,
   HiCheckCircle,
   HiXCircle,
-  HiInbox
+  HiInbox,
+  HiFolder
 } from 'react-icons/hi';
 import axios from 'axios';
 import API_URL from '../config';
@@ -20,9 +21,10 @@ function AccessMode() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const handleFetch = async (contentId = id) => {
-    if (!contentId.trim()) {
-      setError('Please enter an ID');
+  const handleFetch = async (input = id) => {
+    const lookupValue = input.trim();
+    if (!lookupValue) {
+      setError('Please enter an ID or code');
       return;
     }
 
@@ -31,7 +33,17 @@ function AccessMode() {
     setContent(null);
 
     try {
-      const response = await axios.get(`${API_URL}/content/${contentId}`);
+      let response;
+      try {
+        response = await axios.get(`${API_URL}/content/${lookupValue}`);
+      } catch (err) {
+        const isNotFound = err.response?.status === 404 || err.response?.data?.code === 'NOT_FOUND';
+        if (!isNotFound) {
+          throw err;
+        }
+        response = await axios.get(`${API_URL}/c/${lookupValue}`);
+      }
+
       setContent(response.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to retrieve content');
@@ -41,20 +53,30 @@ function AccessMode() {
   };
 
   useEffect(() => {
-    // check if id is in url
+    // check if id/code is in URL
     const params = new URLSearchParams(window.location.search);
     const urlId = params.get('id');
-    if (urlId) {
-      setId(urlId);
-      handleFetch(urlId);
+    const urlCode = params.get('code');
+    const lookupValue = urlId || urlCode;
+
+    if (lookupValue) {
+      setId(lookupValue);
+      handleFetch(lookupValue);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDownload = () => {
     // create download link
-    const downloadUrl = `${API_URL}/content/${id}/download`;
+    const downloadId = content?.id || id;
+    const downloadUrl = `${API_URL}/content/${downloadId}/download`;
     window.location.href = downloadUrl;
+  };
+
+  const handleBundleDownload = () => {
+    const bundleId = content?.id || id;
+    const zipUrl = `${API_URL}/content/${bundleId}/zip`;
+    window.location.href = zipUrl;
   };
 
   const copyContent = () => {
@@ -77,12 +99,12 @@ function AccessMode() {
           <HiSearch size={28} className="search-header-icon" />
           <h2>Retrieve Content</h2>
         </div>
-        <p className="subtitle">Enter the share ID to access files or notes</p>
+        <p className="subtitle">Enter the share ID or short code to access files or notes</p>
 
         <div className="search-bar">
           <input
             type="text"
-            placeholder="Enter share ID (e.g., AbC123Xy)"
+            placeholder="Enter share ID or code (e.g., AbC123Xy)"
             value={id}
             onChange={(e) => setId(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleFetch()}
@@ -194,6 +216,52 @@ function AccessMode() {
             >
               <HiDownload size={20} />
               Download File
+            </motion.button>
+          </motion.div>
+        )}
+
+        {content && content.type === 'bundle' && (
+          <motion.div
+            className="content-display file-display bundle-display"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4 }}
+          >
+            <motion.div
+              className="file-icon-large"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            >
+              <HiFolder size={64} />
+            </motion.div>
+            <h3>Bundle Ready</h3>
+            <div className="bundle-meta">
+              <span className="bundle-pill">{content.fileCount || 0} files</span>
+              {content.id && <span className="bundle-pill bundle-pill-muted">ID: {content.id}</span>}
+            </div>
+            {Array.isArray(content.files) && content.files.length > 0 && (
+              <div className="bundle-files">
+                {content.files.map((f, idx) => (
+                  <div key={f.id || `${f.filename}-${idx}`} className="bundle-file-row">
+                    <span className="bundle-file-index">{idx + 1}</span>
+                    <span className="bundle-file-name" title={f.filename || f.id}>{f.filename || f.id}</span>
+                    {typeof f.size === 'number' && f.size > 0 && (
+                      <span className="bundle-file-size">{(f.size / 1024 / 1024).toFixed(2)} MB</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            <motion.button
+              className="download-btn"
+              onClick={handleBundleDownload}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <HiDownload size={20} />
+              Download Bundle (ZIP)
             </motion.button>
           </motion.div>
         )}
