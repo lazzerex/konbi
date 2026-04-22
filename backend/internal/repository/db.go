@@ -75,53 +75,69 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 		schema = `
 		CREATE TABLE IF NOT EXISTS content (
 			id TEXT PRIMARY KEY,
+			code TEXT UNIQUE,
+			bundle_id TEXT,
 			type TEXT NOT NULL,
 			title TEXT,
 			filename TEXT,
 			filepath TEXT,
 			filesize BIGINT,
 			content TEXT,
+			passcode_hash TEXT,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			expires_at TIMESTAMP NOT NULL,
 			view_count INTEGER DEFAULT 0,
 			deleted_at TIMESTAMP
 		);
 		`
-		
-		// add deleted_at column if it doesn't exist (for existing databases)
+
+		// add columns if they don't exist (for existing databases)
 		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN deleted_at TIMESTAMP")
-		
+		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN code TEXT")
+		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN passcode_hash TEXT")
+		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN bundle_id TEXT")
+
 		schema += `
 		CREATE INDEX IF NOT EXISTS idx_content_expires_at ON content(expires_at);
 		CREATE INDEX IF NOT EXISTS idx_content_deleted_at ON content(deleted_at);
 		CREATE INDEX IF NOT EXISTS idx_content_type ON content(type);
 		CREATE INDEX IF NOT EXISTS idx_content_created_at ON content(created_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_content_bundle_id ON content(bundle_id);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_content_code ON content(code) WHERE code IS NOT NULL;
 		`
 	} else {
 		schema = `
 		CREATE TABLE IF NOT EXISTS content (
 			id TEXT PRIMARY KEY,
+			code TEXT UNIQUE,
+			bundle_id TEXT,
 			type TEXT NOT NULL,
 			title TEXT,
 			filename TEXT,
 			filepath TEXT,
 			filesize INTEGER,
 			content TEXT,
+			passcode_hash TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			expires_at DATETIME NOT NULL,
 			view_count INTEGER DEFAULT 0,
 			deleted_at DATETIME
 		);
 		`
-		
-		// add deleted_at column if it doesn't exist (for existing databases)
+
+		// add columns if they don't exist (for existing databases)
 		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN deleted_at DATETIME")
-		
+		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN code TEXT")
+		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN passcode_hash TEXT")
+		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN bundle_id TEXT")
+
 		schema += `
 		CREATE INDEX IF NOT EXISTS idx_content_expires_at ON content(expires_at);
 		CREATE INDEX IF NOT EXISTS idx_content_deleted_at ON content(deleted_at);
 		CREATE INDEX IF NOT EXISTS idx_content_type ON content(type);
 		CREATE INDEX IF NOT EXISTS idx_content_created_at ON content(created_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_content_bundle_id ON content(bundle_id);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_content_code ON content(code) WHERE code IS NOT NULL;
 		`
 	}
 
