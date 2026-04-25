@@ -504,6 +504,32 @@
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
+.passcode-input {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  font-size: 15px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.passcode-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  background: var(--bg-primary);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.passcode-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .error-message {
   padding: 14px 18px;
   background: rgba(239, 68, 68, 0.1);
