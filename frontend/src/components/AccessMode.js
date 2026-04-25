@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   HiSearch,
@@ -9,7 +9,8 @@ import {
   HiXCircle,
   HiInbox,
   HiFolder,
-  HiX
+  HiX,
+  HiLockClosed
 } from 'react-icons/hi';
 import axios from 'axios';
 import API_URL from '../config';
@@ -22,6 +23,11 @@ function AccessMode() {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
+  const [passcode, setPasscode] = useState('');
+  const [unlockedPasscode, setUnlockedPasscode] = useState(null);
+  const [passcodeError, setPasscodeError] = useState(null);
+  const [unlocking, setUnlocking] = useState(false);
+
   const handleFetch = async (input = id) => {
     const lookupValue = input.trim();
     if (!lookupValue) {
@@ -32,6 +38,9 @@ function AccessMode() {
     setLoading(true);
     setError(null);
     setContent(null);
+    setPasscode('');
+    setUnlockedPasscode(null);
+    setPasscodeError(null);
 
     try {
       const response = await axios.get(`${API_URL}/content/${lookupValue}`);
@@ -58,14 +67,93 @@ function AccessMode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDownload = () => {
-    const downloadUrl = `${API_URL}/content/${content.id}/download`;
-    window.location.href = downloadUrl;
+  const handleUnlock = async () => {
+    const code = passcode.trim();
+    if (!code) return;
+
+    setUnlocking(true);
+    setPasscodeError(null);
+
+    if (content.type === 'bundle') {
+      setUnlockedPasscode(code);
+      setContent({ ...content, has_passcode: false });
+      setPasscode('');
+      setUnlocking(false);
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${API_URL}/content/${content.id}/unlock`, {
+        passcode: code,
+      });
+      setUnlockedPasscode(code);
+      setContent(response.data);
+      setPasscode('');
+    } catch (err) {
+      const status = err.response?.status;
+      if (status === 401 || status === 403) {
+        setPasscodeError('Incorrect passcode');
+      } else {
+        setPasscodeError(err.response?.data?.error || 'Failed to unlock');
+      }
+    } finally {
+      setUnlocking(false);
+    }
   };
 
-  const handleBundleDownload = () => {
+  const handleDownload = async () => {
+    const downloadUrl = `${API_URL}/content/${content.id}/download`;
+    if (unlockedPasscode) {
+      try {
+        const response = await axios.get(downloadUrl, {
+          headers: { 'X-Passcode': unlockedPasscode },
+          responseType: 'blob',
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = content.filename || 'download';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch {
+        setError('Download failed. Please try again.');
+      }
+    } else {
+      window.location.href = downloadUrl;
+    }
+  };
+
+  const handleBundleDownload = async () => {
     const zipUrl = `${API_URL}/content/${content.id}/zip`;
-    window.location.href = zipUrl;
+    if (unlockedPasscode) {
+      try {
+        const response = await axios.get(zipUrl, {
+          headers: { 'X-Passcode': unlockedPasscode },
+          responseType: 'blob',
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bundle-${content.id}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        const status = err.response?.status;
+        if (status === 401 || status === 403) {
+          setError('Incorrect passcode. Please try again.');
+          setUnlockedPasscode(null);
+          setContent({ ...content, has_passcode: true });
+        } else {
+          setError('Download failed. Please try again.');
+        }
+      }
+    } else {
+      window.location.href = zipUrl;
+    }
   };
 
   const copyContent = () => {
@@ -78,7 +166,7 @@ function AccessMode() {
 
   return (
     <div className="access-mode">
-      <motion.div 
+      <motion.div
         className="search-section"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -96,10 +184,10 @@ function AccessMode() {
             placeholder="Enter share ID or code (e.g., AbC123Xy)"
             value={id}
             onChange={(e) => setId(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleFetch()}
+            onKeyDown={(e) => e.key === 'Enter' && handleFetch()}
           />
-          <motion.button 
-            onClick={() => handleFetch()} 
+          <motion.button
+            onClick={() => handleFetch()}
             disabled={loading || !id.trim()}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -159,8 +247,48 @@ function AccessMode() {
           </motion.div>
         )}
 
-        {content && content.type === 'note' && (
-          <motion.div 
+        {content && content.has_passcode && (
+          <motion.div
+            key="passcode-prompt"
+            className="passcode-prompt"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4 }}
+          >
+            <div className="passcode-prompt-icon">
+              <HiLockClosed size={48} />
+            </div>
+            <h3>Protected Content</h3>
+            {content.filename && <p className="passcode-meta">{content.filename}</p>}
+            {content.title && <p className="passcode-meta">{content.title}</p>}
+            <div className="passcode-unlock-row">
+              <input
+                type="text"
+                placeholder="Enter passcode"
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+                className="passcode-unlock-input"
+                disabled={unlocking}
+                autoFocus
+              />
+              <motion.button
+                className="unlock-btn"
+                onClick={handleUnlock}
+                disabled={!passcode.trim() || unlocking}
+                whileHover={!passcode.trim() || unlocking ? {} : { scale: 1.02 }}
+                whileTap={!passcode.trim() || unlocking ? {} : { scale: 0.98 }}
+              >
+                {unlocking ? 'Unlocking...' : 'Unlock'}
+              </motion.button>
+            </div>
+            {passcodeError && <p className="passcode-error">{passcodeError}</p>}
+          </motion.div>
+        )}
+
+        {content && !content.has_passcode && content.type === 'note' && (
+          <motion.div
             className="content-display note-display"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -172,8 +300,8 @@ function AccessMode() {
                 <HiDocument size={24} className="content-icon" />
                 <h3>{content.title || 'Untitled Note'}</h3>
               </div>
-              <motion.button 
-                className="copy-btn" 
+              <motion.button
+                className="copy-btn"
                 onClick={copyContent}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -197,15 +325,15 @@ function AccessMode() {
           </motion.div>
         )}
 
-        {content && content.type === 'file' && (
-          <motion.div 
+        {content && !content.has_passcode && content.type === 'file' && (
+          <motion.div
             className="content-display file-display"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.4 }}
           >
-            <motion.div 
+            <motion.div
               className="file-icon-large"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
@@ -217,8 +345,8 @@ function AccessMode() {
             <p className="file-size">
               Size: {(content.size / 1024 / 1024).toFixed(2)} MB
             </p>
-            <motion.button 
-              className="download-btn" 
+            <motion.button
+              className="download-btn"
               onClick={handleDownload}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -229,7 +357,7 @@ function AccessMode() {
           </motion.div>
         )}
 
-        {content && content.type === 'bundle' && (
+        {content && !content.has_passcode && content.type === 'bundle' && (
           <motion.div
             className="content-display file-display bundle-display"
             initial={{ opacity: 0, y: 20 }}
@@ -276,18 +404,18 @@ function AccessMode() {
         )}
 
         {!content && !error && !loading && (
-          <motion.div 
+          <motion.div
             className="empty-state"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
           >
-            <motion.div 
+            <motion.div
               className="empty-icon"
-              animate={{ 
+              animate={{
                 y: [0, -10, 0],
               }}
-              transition={{ 
+              transition={{
                 duration: 2,
                 repeat: Infinity,
                 ease: "easeInOut"
