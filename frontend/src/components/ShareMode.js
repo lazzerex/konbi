@@ -40,6 +40,9 @@ function ShareMode() {
   const [noteContent, setNoteContent] = useState('');
   const [noteResult, setNoteResult] = useState(null);
 
+  // passcode (shared across tabs)
+  const [passcode, setPasscode] = useState('');
+
   // shared
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState(null);
@@ -106,6 +109,7 @@ function ShareMode() {
 
       const formData = new FormData();
       formData.append('file', file);
+      if (passcode.trim()) formData.append('passcode', passcode.trim());
 
       try {
         const response = await axios.post(`${API_URL}/upload`, formData, {
@@ -143,6 +147,7 @@ function ShareMode() {
       setUploadProgress(0);
       const formData = new FormData();
       files.forEach(f => formData.append('files', f));
+      if (passcode.trim()) formData.append('passcode', passcode.trim());
 
       try {
         const response = await axios.post(`${API_URL}/bundle`, formData, {
@@ -171,6 +176,7 @@ function ShareMode() {
     }
 
     setFiles([]);
+    setPasscode('');
     setUploading(false);
     setUploadingIndex(null);
     setUploadProgress(0);
@@ -190,6 +196,7 @@ function ShareMode() {
       const response = await axios.post(`${API_URL}/note`, {
         title: noteTitle || 'Untitled Note',
         content: noteContent,
+        ...(passcode.trim() ? { passcode: passcode.trim() } : {}),
       });
 
       setNoteResult({
@@ -200,6 +207,7 @@ function ShareMode() {
       });
       setNoteTitle('');
       setNoteContent('');
+      setPasscode('');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to create note');
     } finally {
@@ -371,6 +379,15 @@ function ShareMode() {
               </motion.div>
             )}
 
+            <input
+              type="text"
+              placeholder="Passcode (optional)"
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              className="passcode-input"
+              disabled={uploading}
+            />
+
             <motion.button
               className="submit-btn"
               onClick={handleFileUpload}
@@ -403,6 +420,14 @@ function ShareMode() {
               onChange={(e) => setNoteContent(e.target.value)}
               className="note-content-input"
               rows="12"
+            />
+            <input
+              type="text"
+              placeholder="Passcode (optional)"
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              className="passcode-input"
+              disabled={uploading}
             />
             <motion.button
               className="submit-btn"
