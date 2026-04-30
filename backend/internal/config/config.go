@@ -16,9 +16,13 @@ type Config struct {
 
 // server configuration
 type ServerConfig struct {
-	Port           string
-	AllowedOrigins string
-	Environment    string
+	Port               string
+	AllowedOrigins     string
+	Environment        string
+	JWTSecret          string
+	JWTRefreshSecret   string
+	JWTExpiry          time.Duration
+	JWTRefreshExpiry   time.Duration
 }
 
 // database configuration
@@ -47,9 +51,13 @@ type SecurityConfig struct {
 func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
-			Port:           getEnv("PORT", "8080"),
-			AllowedOrigins: getEnv("ALLOWED_ORIGINS", "*"),
-			Environment:    getEnv("ENVIRONMENT", "development"),
+			Port:             getEnv("PORT", "8080"),
+			AllowedOrigins:   getEnv("ALLOWED_ORIGINS", "*"),
+			Environment:      getEnv("ENVIRONMENT", "development"),
+			JWTSecret:        getEnv("JWT_SECRET", "dev-secret-key-change-in-production"),
+			JWTRefreshSecret: getEnv("JWT_REFRESH_SECRET", "dev-refresh-secret-key-change-in-production"),
+			JWTExpiry:        time.Duration(getEnvAsInt("JWT_EXPIRY_HOURS", 1)) * time.Hour,
+			JWTRefreshExpiry: time.Duration(getEnvAsInt("JWT_REFRESH_EXPIRY_DAYS", 7)) * 24 * time.Hour,
 		},
 		Database: DatabaseConfig{
 			URL:            getEnv("DATABASE_URL", ""),
