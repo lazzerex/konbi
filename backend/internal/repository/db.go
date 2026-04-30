@@ -73,10 +73,19 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 	var schema string
 	if isPostgres {
 		schema = `
+		CREATE TABLE IF NOT EXISTS users (
+			id TEXT PRIMARY KEY,
+			email TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		);
+		
 		CREATE TABLE IF NOT EXISTS content (
 			id TEXT PRIMARY KEY,
 			code TEXT UNIQUE,
 			bundle_id TEXT,
+			user_id TEXT,
 			type TEXT NOT NULL,
 			title TEXT,
 			filename TEXT,
@@ -87,7 +96,8 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			expires_at TIMESTAMP NOT NULL,
 			view_count INTEGER DEFAULT 0,
-			deleted_at TIMESTAMP
+			deleted_at TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
 		);
 		`
 
@@ -96,21 +106,33 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN code TEXT")
 		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN passcode_hash TEXT")
 		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN bundle_id TEXT")
+		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN user_id TEXT")
 
 		schema += `
+		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 		CREATE INDEX IF NOT EXISTS idx_content_expires_at ON content(expires_at);
 		CREATE INDEX IF NOT EXISTS idx_content_deleted_at ON content(deleted_at);
 		CREATE INDEX IF NOT EXISTS idx_content_type ON content(type);
 		CREATE INDEX IF NOT EXISTS idx_content_created_at ON content(created_at DESC);
 		CREATE INDEX IF NOT EXISTS idx_content_bundle_id ON content(bundle_id);
+		CREATE INDEX IF NOT EXISTS idx_content_user_id ON content(user_id);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_content_code ON content(code) WHERE code IS NOT NULL;
 		`
 	} else {
 		schema = `
+		CREATE TABLE IF NOT EXISTS users (
+			id TEXT PRIMARY KEY,
+			email TEXT UNIQUE NOT NULL,
+			password_hash TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		
 		CREATE TABLE IF NOT EXISTS content (
 			id TEXT PRIMARY KEY,
 			code TEXT UNIQUE,
 			bundle_id TEXT,
+			user_id TEXT,
 			type TEXT NOT NULL,
 			title TEXT,
 			filename TEXT,
@@ -121,7 +143,8 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			expires_at DATETIME NOT NULL,
 			view_count INTEGER DEFAULT 0,
-			deleted_at DATETIME
+			deleted_at DATETIME,
+			FOREIGN KEY (user_id) REFERENCES users(id)
 		);
 		`
 
@@ -130,13 +153,16 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN code TEXT")
 		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN passcode_hash TEXT")
 		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN bundle_id TEXT")
+		m.db.ExecContext(ctx, "ALTER TABLE content ADD COLUMN user_id TEXT")
 
 		schema += `
+		CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 		CREATE INDEX IF NOT EXISTS idx_content_expires_at ON content(expires_at);
 		CREATE INDEX IF NOT EXISTS idx_content_deleted_at ON content(deleted_at);
 		CREATE INDEX IF NOT EXISTS idx_content_type ON content(type);
 		CREATE INDEX IF NOT EXISTS idx_content_created_at ON content(created_at DESC);
 		CREATE INDEX IF NOT EXISTS idx_content_bundle_id ON content(bundle_id);
+		CREATE INDEX IF NOT EXISTS idx_content_user_id ON content(user_id);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_content_code ON content(code) WHERE code IS NOT NULL;
 		`
 	}
