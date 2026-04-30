@@ -62,20 +62,24 @@ func main() {
 
 	// initialize repositories
 	contentRepo := repository.NewContentRepository(db, logger)
+	userRepo := repository.NewUserRepository(db, logger)
 
 	// initialize services
 	contentService := services.NewContentService(contentRepo, cfg, logger)
+	authService := services.NewAuthService(userRepo, cfg, logger)
 
 	// initialize handlers
 	contentHandler := handlers.NewContentHandler(contentService, logger)
+	authHandler := handlers.NewAuthHandler(authService, logger)
 
 	// initialize middlewares
 	loggerMiddleware := middleware.NewLoggerMiddleware(logger)
 	rateLimiter := middleware.NewRateLimiter(cfg.Security.RateLimitPerSec, cfg.Security.RateLimitBurst, logger)
 	adminAuth := middleware.NewAdminAuth(cfg, logger)
+	jwtAuth := middleware.NewJWTAuth(authService, logger)
 
 	// setup router
-	r := setupRouter(cfg, contentHandler, loggerMiddleware, rateLimiter, adminAuth)
+	r := setupRouter(cfg, contentHandler, authHandler, loggerMiddleware, rateLimiter, adminAuth, jwtAuth)
 
 	// start cleanup routine
 	go startCleanupRoutine(contentService, logger)
@@ -108,9 +112,11 @@ func setupLogger() *logrus.Logger {
 func setupRouter(
 	cfg *config.Config,
 	contentHandler *handlers.ContentHandler,
+	authHandler *handlers.AuthHandler,
 	loggerMiddleware *middleware.LoggerMiddleware,
 	rateLimiter *middleware.RateLimiter,
 	adminAuth *middleware.AdminAuth,
+	jwtAuth *middleware.JWTAuth,
 ) *gin.Engine {
 	// set gin mode based on environment
 	if cfg.Server.Environment == "production" {
@@ -151,6 +157,17 @@ func setupRouter(
 	// api routes
 	api := r.Group("/api")
 	{
+		// auth routes (public)
+		auth := api.Group("/auth")
+		{
+			auth.POST("/register", authHandler.Register)
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/refresh", authHandler.Refresh)
+			auth.GET("/me", jwtAuth.Middleware(), authHandler.Me)
+			auth.DELETE("/logout", jwtAuth.Middleware(), authHandler.Logout)
+		}
+
+		// content routes
 		api.POST("/upload", contentHandler.Upload)
 		api.POST("/note", contentHandler.Note)
 		api.POST("/bundle", contentHandler.Bundle)
