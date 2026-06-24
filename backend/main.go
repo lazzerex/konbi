@@ -30,6 +30,9 @@ func main() {
 
 	// load configuration
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		logger.WithError(err).Fatal("invalid configuration")
+	}
 	logger.WithFields(logrus.Fields{
 		"environment": cfg.Server.Environment,
 		"port":        cfg.Server.Port,
