@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"konbi/internal/config"
 	"konbi/internal/handlers"
@@ -79,7 +80,7 @@ func main() {
 	jwtAuth := middleware.NewJWTAuth(authService, logger)
 
 	// setup router
-	r := setupRouter(cfg, contentHandler, authHandler, loggerMiddleware, rateLimiter, adminAuth, jwtAuth)
+	r := setupRouter(db, cfg, contentHandler, authHandler, loggerMiddleware, rateLimiter, adminAuth, jwtAuth)
 
 	// start cleanup routine
 	go startCleanupRoutine(contentService, logger)
@@ -110,6 +111,7 @@ func setupLogger() *logrus.Logger {
 
 // setup router configures gin router with middleware and routes
 func setupRouter(
+	db *sql.DB,
 	cfg *config.Config,
 	contentHandler *handlers.ContentHandler,
 	authHandler *handlers.AuthHandler,
@@ -152,7 +154,7 @@ func setupRouter(
 
 	// public routes
 	r.GET("/", handlers.Root)
-	r.GET("/health", handlers.HealthCheck)
+	r.GET("/health", handlers.HealthCheck(db))
 
 	// api routes
 	api := r.Group("/api")
