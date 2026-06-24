@@ -269,7 +269,11 @@ func (s *ContentService) rollbackBundle(bundleID string, paths []string) {
 	for _, p := range paths {
 		os.Remove(p)
 	}
-	s.repo.SoftDelete(context.Background(), bundleID)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.repo.SoftDelete(ctx, bundleID); err != nil {
+		s.logger.WithError(err).WithField("bundle_id", bundleID).Error("failed to soft-delete bundle during rollback")
+	}
 }
 
 // get bundle files retrieves all files belonging to a bundle
