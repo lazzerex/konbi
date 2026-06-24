@@ -205,6 +205,24 @@ func (m *DBManager) ConfigurePool(maxConns, maxIdle int, maxLifetime int) {
 	}).Info("database connection pool configured")
 }
 
+// convertQuery converts ? placeholders to $1, $2, ... for PostgreSQL
+func convertQuery(isPostgres bool, query string) string {
+	if !isPostgres {
+		return query
+	}
+	result := ""
+	paramCount := 1
+	for _, char := range query {
+		if char == '?' {
+			result += fmt.Sprintf("$%d", paramCount)
+			paramCount++
+		} else {
+			result += string(char)
+		}
+	}
+	return result
+}
+
 // close database connection
 func (m *DBManager) Close() error {
 	if m.db != nil {
