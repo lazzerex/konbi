@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -187,13 +188,20 @@ func (m *DBManager) RunMigrations(ctx context.Context) error {
 
 // configure connection pool settings
 func (m *DBManager) ConfigurePool(maxConns, maxIdle int, maxLifetime int) {
+	lifetime := time.Duration(maxLifetime) * time.Minute
 	m.db.SetMaxOpenConns(maxConns)
 	m.db.SetMaxIdleConns(maxIdle)
-	m.db.SetConnMaxLifetime(0) // connections don't expire
+	m.db.SetConnMaxLifetime(lifetime)
+	// drop idle connections one minute before lifetime so Neon's 5-min suspend
+	// doesn't leave the pool holding dead TCP connections
+	if lifetime > time.Minute {
+		m.db.SetConnMaxIdleTime(lifetime - time.Minute)
+	}
 
 	m.logger.WithFields(logrus.Fields{
-		"max_open_conns": maxConns,
-		"max_idle_conns": maxIdle,
+		"max_open_conns":    maxConns,
+		"max_idle_conns":    maxIdle,
+		"conn_max_lifetime": lifetime,
 	}).Info("database connection pool configured")
 }
 
