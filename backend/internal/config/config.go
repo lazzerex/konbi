@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -54,8 +55,8 @@ func Load() *Config {
 			Port:             getEnv("PORT", "8080"),
 			AllowedOrigins:   getEnv("ALLOWED_ORIGINS", "*"),
 			Environment:      getEnv("ENVIRONMENT", "development"),
-			JWTSecret:        getEnv("JWT_SECRET", "dev-secret-key-change-in-production"),
-			JWTRefreshSecret: getEnv("JWT_REFRESH_SECRET", "dev-refresh-secret-key-change-in-production"),
+			JWTSecret:        getEnv("JWT_SECRET", devJWTSecret),
+			JWTRefreshSecret: getEnv("JWT_REFRESH_SECRET", devJWTRefreshSecret),
 			JWTExpiry:        time.Duration(getEnvAsInt("JWT_EXPIRY_HOURS", 1)) * time.Hour,
 			JWTRefreshExpiry: time.Duration(getEnvAsInt("JWT_REFRESH_EXPIRY_DAYS", 7)) * 24 * time.Hour,
 		},
@@ -76,6 +77,25 @@ func Load() *Config {
 			RateLimitBurst:  getEnvAsInt("RATE_LIMIT_BURST", 10),
 		},
 	}
+}
+
+const devJWTSecret = "dev-secret-key-change-in-production"
+const devJWTRefreshSecret = "dev-refresh-secret-key-change-in-production"
+
+// Validate returns an error if critical config is unsafe for the current environment
+func (c *Config) Validate() error {
+	if c.Server.Environment == "production" {
+		if c.Server.JWTSecret == "" || c.Server.JWTSecret == devJWTSecret {
+			return fmt.Errorf("JWT_SECRET must be set to a secure value in production")
+		}
+		if c.Server.JWTRefreshSecret == "" || c.Server.JWTRefreshSecret == devJWTRefreshSecret {
+			return fmt.Errorf("JWT_REFRESH_SECRET must be set to a secure value in production")
+		}
+		if c.Server.AllowedOrigins == "*" || c.Server.AllowedOrigins == "" {
+			return fmt.Errorf("ALLOWED_ORIGINS must be set to explicit origins in production")
+		}
+	}
+	return nil
 }
 
 // helper to get env variable with default
