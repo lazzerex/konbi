@@ -1,16 +1,26 @@
 package handlers
 
 import (
+	"database/sql"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-// health check handler
-func HealthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status": "ok",
-	})
+// health check handler pings the database to verify connectivity
+func HealthCheck(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if err := db.PingContext(c.Request.Context()); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status": "error",
+				"error":  "database unreachable",
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"status": "ok",
+		})
+	}
 }
 
 // root handler
