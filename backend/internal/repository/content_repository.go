@@ -38,22 +38,7 @@ func (r *ContentRepository) nowFunc() string {
 
 // helper to convert ? placeholders to postgresql $1, $2, etc
 func (r *ContentRepository) convertQuery(query string) string {
-	if !r.isPostgres {
-		return query
-	}
-	
-	// convert ? to $1, $2, $3...
-	result := ""
-	paramCount := 1
-	for _, char := range query {
-		if char == '?' {
-			result += fmt.Sprintf("$%d", paramCount)
-			paramCount++
-		} else {
-			result += string(char)
-		}
-	}
-	return result
+	return convertQuery(r.isPostgres, query)
 }
 
 // create inserts new content record
