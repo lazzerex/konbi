@@ -5,30 +5,33 @@ import (
 	"database/sql"
 	"konbi/internal/errors"
 	"konbi/internal/models"
+	"os"
 
 	"github.com/sirupsen/logrus"
 )
 
 // user repository handles user database operations
 type UserRepository struct {
-	db     *sql.DB
-	logger *logrus.Logger
+	db         *sql.DB
+	logger     *logrus.Logger
+	isPostgres bool
 }
 
 // create new user repository
 func NewUserRepository(db *sql.DB, logger *logrus.Logger) *UserRepository {
 	return &UserRepository{
-		db:     db,
-		logger: logger,
+		db:         db,
+		logger:     logger,
+		isPostgres: os.Getenv("DATABASE_URL") != "",
 	}
 }
 
 // create inserts new user
 func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
-	query := `
+	query := convertQuery(r.isPostgres, `
 		INSERT INTO users (id, email, password_hash, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-	`
+		VALUES (?, ?, ?, ?, ?)
+	`)
 
 	_, err := r.db.ExecContext(ctx, query, user.ID, user.Email, user.PasswordHash, user.CreatedAt, user.UpdatedAt)
 	if err != nil {
@@ -44,11 +47,11 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 
 // get by id retrieves user by id
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
-	query := `
+	query := convertQuery(r.isPostgres, `
 		SELECT id, email, password_hash, created_at, updated_at
 		FROM users
-		WHERE id = $1
-	`
+		WHERE id = ?
+	`)
 
 	var user models.User
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -73,11 +76,11 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*models.User, 
 
 // get by email retrieves user by email
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
-	query := `
+	query := convertQuery(r.isPostgres, `
 		SELECT id, email, password_hash, created_at, updated_at
 		FROM users
-		WHERE email = $1
-	`
+		WHERE email = ?
+	`)
 
 	var user models.User
 	err := r.db.QueryRowContext(ctx, query, email).Scan(
