@@ -3,6 +3,7 @@ package middleware
 import (
 	"konbi/internal/errors"
 	"konbi/internal/services"
+	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -51,8 +52,11 @@ func (j *JWTAuth) Middleware() gin.HandlerFunc {
 		claims, err := j.authService.VerifyAccessToken(token)
 		if err != nil {
 			j.logger.WithField("ip", c.ClientIP()).Warn("invalid token")
-			appErr := err.(*errors.AppError)
-			c.JSON(appErr.StatusCode, gin.H{"error": appErr.Message})
+			if appErr, ok := err.(*errors.AppError); ok {
+				c.JSON(appErr.StatusCode, gin.H{"error": appErr.Message})
+			} else {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			}
 			c.Abort()
 			return
 		}
