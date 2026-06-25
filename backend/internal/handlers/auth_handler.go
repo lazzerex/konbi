@@ -85,8 +85,10 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
-	user := &models.User{
-		ID: userID.(string),
+	user, err := h.service.GetUserByID(c.Request.Context(), userID.(string))
+	if err != nil {
+		h.respondWithError(c, err)
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
