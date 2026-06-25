@@ -175,6 +175,18 @@ func (s *AuthService) RefreshAccessToken(ctx context.Context, refreshToken strin
 	return accessToken, nil
 }
 
+// get user by id retrieves full user profile from DB
+func (s *AuthService) GetUserByID(ctx context.Context, id string) (*models.User, error) {
+	user, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.NewNotFoundError("user not found")
+	}
+	return user, nil
+}
+
 // private helper to generate tokens
 func (s *AuthService) generateAuthResponse(user *models.User) (*models.AuthResponse, error) {
 	accessToken, err := s.generateAccessToken(user)
