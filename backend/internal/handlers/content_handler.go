@@ -218,7 +218,9 @@ func (h *ContentHandler) BundleZip(c *gin.Context) {
 			h.logger.WithError(err).WithField("filepath", *f.Filepath).Error("failed to open file for zip")
 			continue
 		}
-		io.Copy(w, src)
+		if _, err := io.Copy(w, src); err != nil {
+			h.logger.WithError(err).WithField("filepath", *f.Filepath).Error("failed to copy file to zip")
+		}
 		src.Close()
 	}
 	zw.Close()
