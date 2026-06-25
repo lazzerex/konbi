@@ -80,8 +80,8 @@ func (r *ContentRepository) FindByID(ctx context.Context, id string) (*models.Co
 	query := r.convertQuery(fmt.Sprintf(`
 		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
 		FROM content
-		WHERE id = ? AND (deleted_at IS NULL OR deleted_at > %s)
-	`, r.nowFunc()))
+		WHERE id = ? AND deleted_at IS NULL
+	`))
 
 	content := &models.Content{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -117,8 +117,8 @@ func (r *ContentRepository) FindActiveByID(ctx context.Context, id string) (*mod
 	query := r.convertQuery(fmt.Sprintf(`
 		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
 		FROM content
-		WHERE id = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
-	`, r.nowFunc(), r.nowFunc()))
+		WHERE id = ? AND expires_at > %s AND deleted_at IS NULL
+	`, r.nowFunc()))
 
 	content := &models.Content{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -177,9 +177,9 @@ func (r *ContentRepository) ListAll(ctx context.Context) ([]*models.Content, err
 	query := fmt.Sprintf(`
 		SELECT id, code, type, title, filename, filesize, passcode_hash, created_at, expires_at, view_count, deleted_at
 		FROM content
-		WHERE deleted_at IS NULL OR deleted_at > %s
+		WHERE deleted_at IS NULL
 		ORDER BY created_at DESC
-	`, r.nowFunc())
+	`)
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -219,8 +219,8 @@ func (r *ContentRepository) FindExpiredContent(ctx context.Context) ([]*models.C
 	query := r.convertQuery(fmt.Sprintf(`
 		SELECT id, filepath
 		FROM content
-		WHERE expires_at < %s AND type = ? AND (deleted_at IS NULL OR deleted_at > %s)
-	`, r.nowFunc(), r.nowFunc()))
+		WHERE expires_at < %s AND type = ? AND deleted_at IS NULL
+	`, r.nowFunc()))
 
 	rows, err := r.db.QueryContext(ctx, query, models.ContentTypeFile)
 	if err != nil {
@@ -270,7 +270,11 @@ func (r *ContentRepository) DeleteExpired(ctx context.Context) (int64, error) {
 		return 0, errors.NewInternalError("failed to delete expired content", err)
 	}
 
-	count, _ := result.RowsAffected()
+	count, err := result.RowsAffected()
+	if err != nil {
+		r.logger.WithError(err).Error("failed to get affected rows after delete expired")
+		return 0, errors.NewInternalError("failed to count deleted rows", err)
+	}
 	r.logger.WithField("deleted_count", count).Info("expired content deleted")
 	return count, nil
 }
@@ -280,9 +284,9 @@ func (r *ContentRepository) FindBundleFiles(ctx context.Context, bundleID string
 	query := r.convertQuery(fmt.Sprintf(`
 		SELECT id, code, bundle_id, type, title, filename, filepath, filesize, content, passcode_hash, created_at, expires_at, view_count, deleted_at
 		FROM content
-		WHERE bundle_id = ? AND type = ? AND expires_at > %s AND (deleted_at IS NULL OR deleted_at > %s)
+		WHERE bundle_id = ? AND type = ? AND expires_at > %s AND deleted_at IS NULL
 		ORDER BY created_at ASC
-	`, r.nowFunc(), r.nowFunc()))
+	`, r.nowFunc()))
 
 	rows, err := r.db.QueryContext(ctx, query, bundleID, models.ContentTypeFile)
 	if err != nil {
