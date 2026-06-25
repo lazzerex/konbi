@@ -154,6 +154,7 @@ func setupRouter(
 	// global middleware
 	r.Use(loggerMiddleware.Middleware())
 	r.Use(rateLimiter.Middleware())
+	r.Use(middleware.Timeout(30 * time.Second))
 
 	// public routes
 	r.GET("/", handlers.Root)
@@ -243,7 +244,7 @@ func startServer(r *gin.Engine, cfg *config.Config, logger *logrus.Logger) {
 	logger.Info("shutting down server...")
 
 	// graceful shutdown with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
