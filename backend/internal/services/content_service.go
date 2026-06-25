@@ -290,7 +290,9 @@ func (s *ContentService) GetContent(ctx context.Context, id string) (*models.Con
 
 	// increment view count asynchronously
 	go func() {
-		if err := s.repo.IncrementViewCount(context.Background(), id); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := s.repo.IncrementViewCount(ctx, id); err != nil {
 			s.logger.WithError(err).WithField("content_id", id).Error("failed to increment view count")
 		}
 	}()
@@ -315,7 +317,9 @@ func (s *ContentService) UnlockContent(ctx context.Context, id, passcode string)
 	}
 
 	go func() {
-		if err := s.repo.IncrementViewCount(context.Background(), id); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := s.repo.IncrementViewCount(ctx, id); err != nil {
 			s.logger.WithError(err).WithField("content_id", id).Error("failed to increment view count")
 		}
 	}()
